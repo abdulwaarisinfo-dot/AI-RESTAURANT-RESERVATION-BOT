@@ -1,4 +1,4 @@
-<!-- _base_styles.html — Jinja2 {% include %} — do NOT add <html>/<head> tags here -->
+<!-- _base_styles.html — shared include, do NOT add html/head tags here -->
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -606,7 +606,7 @@
      so this will return '' in a strict setup — API calls must go via
      the form-based routes or the server must expose the token another way.
      Retained for compatibility with JS-driven API calls on the billing page.
-  ── */
+  */
   function getCookie(name) {
     return document.cookie
       .split(';')
