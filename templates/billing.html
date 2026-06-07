@@ -4,7 +4,6 @@
   <title>Billing — Tablely</title>
   {% include "_base_styles.html" %}
   <style>
-    /* ── PAGE SHELL ── */
     .billing-page {
       min-height: 100vh;
       padding: 96px 24px 80px;
@@ -12,11 +11,8 @@
       margin: 0 auto;
     }
 
-    /* ── HEADER ── */
-    .billing-header {
-      text-align: center;
-      margin-bottom: 52px;
-    }
+    /* HEADER */
+    .billing-header { text-align: center; margin-bottom: 52px; }
     .billing-eyebrow {
       font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
       color: var(--gold); margin-bottom: 14px;
@@ -28,58 +24,42 @@
     }
     .billing-header p { font-size: .9rem; color: var(--text-2); }
 
-    /* ── STATUS BANNERS ── */
+    /* STATUS BANNERS */
     .status-banner {
       display: flex; align-items: center; justify-content: space-between;
       gap: 16px; padding: 18px 24px;
       border-radius: 14px; margin-bottom: 44px; flex-wrap: wrap;
     }
-    .status-banner.free {
-      background: rgba(201,169,110,.07);
-      border: 1px solid rgba(201,169,110,.22);
-    }
-    .status-banner.active {
-      background: rgba(91,184,145,.07);
-      border: 1px solid rgba(91,184,145,.22);
-    }
-    .status-banner.cancelled {
-      background: rgba(200,80,80,.07);
-      border: 1px solid rgba(200,80,80,.22);
-    }
-    .status-left { display: flex; align-items: flex-start; gap: 14px; }
-    .status-icon { font-size: 1.25rem; padding-top: 2px; }
+    .status-banner.free     { background: rgba(201,169,110,.07); border: 1px solid rgba(201,169,110,.22); }
+    .status-banner.active   { background: rgba(91,184,145,.07);  border: 1px solid rgba(91,184,145,.22);  }
+    .status-banner.cancelled{ background: rgba(200,80,80,.07);   border: 1px solid rgba(200,80,80,.22);   }
+    .status-left  { display: flex; align-items: flex-start; gap: 14px; }
+    .status-icon  { font-size: 1.25rem; padding-top: 2px; }
     .status-title { font-size: .9rem; color: var(--text); font-weight: 500; margin-bottom: 3px; }
-    .status-desc { font-size: .8rem; color: var(--text-2); line-height: 1.5; }
+    .status-desc  { font-size: .8rem; color: var(--text-2); line-height: 1.5; }
 
     /* FREE TIER USAGE METER */
-    .free-usage {
-      display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap;
-    }
+    .free-usage { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
     .usage-bar-wrap {
       flex: 1; min-width: 140px; height: 4px;
       background: var(--bg-4); border-radius: 2px; overflow: hidden;
     }
     .usage-bar-fill {
-      height: 100%; border-radius: 2px;
-      background: var(--gold);
-      transition: width .5s ease;
+      height: 100%; border-radius: 2px; background: var(--gold); transition: width .5s ease;
     }
-    .usage-bar-fill.danger { background: #e55; }
+    .usage-bar-fill.danger { background: var(--red); }
     .usage-label { font-size: .75rem; color: var(--text-3); white-space: nowrap; }
 
-    /* ── PLANS GRID ── */
+    /* PLANS GRID */
     .plans-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin-bottom: 48px;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 20px; margin-bottom: 48px;
     }
     .plan-card {
       background: var(--bg-2); border: 1px solid var(--border);
       border-radius: 16px; padding: 30px;
       display: flex; flex-direction: column;
-      position: relative;
-      transition: border-color .2s, transform .2s;
+      position: relative; transition: border-color .2s, transform .2s;
     }
     .plan-card:hover { transform: translateY(-2px); }
     .plan-card.featured {
@@ -94,9 +74,7 @@
       font-size: .65rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
       padding: 3px 14px; border-radius: 100px;
     }
-    .plan-card.current {
-      border-color: var(--green);
-    }
+    .plan-card.current { border-color: var(--green); }
     .plan-card.current::after {
       content: 'Current Plan';
       position: absolute; top: -11px; right: 20px;
@@ -113,7 +91,7 @@
       font-size: 3.2rem; line-height: 1; color: var(--text); margin-bottom: 4px;
     }
     .plan-price sup { font-size: 1.2rem; vertical-align: top; margin-top: .45rem; }
-    .plan-period { font-size: .8rem; color: var(--text-3); }
+    .plan-period  { font-size: .8rem; color: var(--text-3); }
     .plan-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
     .plan-features {
       flex: 1; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;
@@ -123,8 +101,7 @@
       font-size: .84rem; color: var(--text-2); line-height: 1.45;
     }
     .plan-feature::before {
-      content: '◆'; font-size: .38rem; color: var(--gold);
-      flex-shrink: 0; margin-top: 5px;
+      content: '◆'; font-size: .38rem; color: var(--gold); flex-shrink: 0; margin-top: 5px;
     }
     .plan-highlight {
       font-size: .75rem; color: var(--text-3);
@@ -134,7 +111,13 @@
     }
     .plan-highlight strong { color: var(--text-2); }
 
-    /* ── CANCEL SECTION ── */
+    /* Form-submit buttons inherit .btn styles fully */
+    .plan-submit-btn {
+      width: 100%; appearance: none; -webkit-appearance: none;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    /* CANCEL SECTION */
     .cancel-section {
       text-align: center; padding: 28px 24px;
       background: var(--bg-2); border: 1px solid var(--border);
@@ -143,26 +126,11 @@
     .cancel-section h3 { font-size: 1rem; color: var(--text); margin-bottom: 6px; }
     .cancel-section p  { font-size: .83rem; color: var(--text-2); margin-bottom: 18px; }
 
-    /* ── TOAST ── */
-    #toast {
-      position: fixed; bottom: 28px; right: 28px; z-index: 9999;
-      padding: 12px 20px; border-radius: 10px;
-      font-size: .85rem; color: #fff;
-      opacity: 0; transform: translateY(8px);
-      transition: opacity .25s, transform .25s;
-      pointer-events: none;
-    }
-    #toast.show { opacity: 1; transform: translateY(0); }
-    #toast.success { background: rgba(91,184,145,.9); }
-    #toast.error   { background: rgba(200,80,80,.9); }
-
-    /* ── RESPONSIVE ── */
     @media (max-width: 860px) { .plans-grid { grid-template-columns: 1fr; } }
     @media (max-width: 600px) { .billing-page { padding-top: 76px; } }
   </style>
 </head>
 <body>
-  <!-- NAV -->
   <nav class="nav">
     <a class="nav-brand" href="/">
       <div class="nav-brand-dot"></div>
@@ -177,23 +145,26 @@
 
   <div class="billing-page">
 
-    <!-- Header -->
     <div class="billing-header">
       <div class="billing-eyebrow">◆ Subscription</div>
       <h1>Plans &amp; Billing</h1>
       <p>All plans include the full AI booking agent, CRM, and real-time dashboard. Unlimited slot scheduling on every plan.</p>
     </div>
 
-    <!-- Status banner -->
+    {# ── STATUS BANNER ─────────────────────────────────────────────────────── #}
     {% if active %}
     <div class="status-banner active">
       <div class="status-left">
         <div class="status-icon">✓</div>
         <div>
-          <div class="status-title">Subscription Active — {{ plans[current_plan].name if current_plan in plans else current_plan | capitalize }} Plan</div>
+          <div class="status-title">
+            Subscription Active —
+            {{ plans[current_plan].name if current_plan in plans else current_plan | capitalize }} Plan
+          </div>
           <div class="status-desc">
             {{ limits.reservations_used }} / {{ limits.reservations_limit }} reservations used this month
-            &nbsp;·&nbsp; Up to {{ limits.tables_max if limits.tables_max < 999 else 'unlimited' }} tables
+            &nbsp;·&nbsp;
+            Up to {{ limits.tables_max if limits.tables_max < 999 else 'unlimited' }} tables
             &nbsp;·&nbsp; Unlimited slot scheduling
           </div>
         </div>
@@ -213,7 +184,6 @@
     </div>
 
     {% else %}
-    {# Free tier — show live usage meter #}
     <div class="status-banner free">
       <div class="status-left">
         <div class="status-icon">◆</div>
@@ -225,8 +195,10 @@
           </div>
           <div class="free-usage">
             <div class="usage-bar-wrap">
-              <div class="usage-bar-fill {% if limits.reservations_left <= 2 %}danger{% endif %}"
-                   style="width: {{ ((limits.reservations_used / free_reservations) * 100) | int }}%"></div>
+              <div
+                class="usage-bar-fill {% if limits.reservations_left <= 2 %}danger{% endif %}"
+                style="width: {{ ((limits.reservations_used / free_reservations) * 100) | int }}%"
+              ></div>
             </div>
             <span class="usage-label">{{ limits.reservations_used }}/{{ free_reservations }} used</span>
           </div>
@@ -236,7 +208,13 @@
     </div>
     {% endif %}
 
-    <!-- Plans -->
+    {# ── PLANS ─────────────────────────────────────────────────────────────── #}
+    {#
+      Each plan button is a real <form> POST to /billing/subscribe (defined in
+      main.py as billing_subscribe). FastAPI reads the httpOnly access_token
+      cookie server-side via get_owner_from_cookie() — no JS token handling needed.
+      Route: POST /billing/subscribe  body: plan=<key>  → Paddle checkout redirect
+    #}
     <div class="plans-grid">
       {% for key, plan in plans.items() %}
       <div class="plan-card
@@ -244,11 +222,21 @@
         {% if key == current_plan and active %}current{% endif %}
       ">
         <div class="plan-name">{{ plan.name }}</div>
-        <div class="plan-price"><sup>$</sup>{{ plan.price_month }}<span class="plan-period">/mo</span></div>
+        <div class="plan-price">
+          <sup>$</sup>{{ plan.price_month }}<span class="plan-period">/mo</span>
+        </div>
 
         <div class="plan-highlight">
-          ◆ &nbsp;<strong>{{ plan.reservations_month | int | string | replace('1200','1,200') | replace('1600','1,600') | replace('2000','2,000') }}</strong> reservations / mo
-          &nbsp;·&nbsp; {{ plan.tables_max if plan.tables_max < 999 else '∞' }} tables
+          ◆ &nbsp;
+          <strong>
+            {{ plan.reservations_month | int | string
+               | replace('1200','1,200')
+               | replace('1600','1,600')
+               | replace('2000','2,000') }}
+          </strong>
+          reservations / mo
+          &nbsp;·&nbsp;
+          {{ plan.tables_max if plan.tables_max < 999 else '∞' }} tables
         </div>
 
         <hr class="plan-divider">
@@ -260,135 +248,41 @@
         </div>
 
         {% if key == current_plan and active %}
-          <button class="btn btn-ghost" disabled style="width:100%;cursor:default;">Current Plan</button>
+          <button class="btn btn-ghost plan-submit-btn" disabled>Current Plan</button>
         {% else %}
-          <button
-            class="btn {% if key == 'professional' %}btn-primary{% else %}btn-outline{% endif %}"
-            style="width:100%;"
-            onclick="subscribe('{{ key }}', this)"
-          >
-            {% if active %}Switch to {{ plan.name }}{% else %}Get {{ plan.name }}{% endif %}
-          </button>
+          {# Plain HTML form POST — server reads httpOnly cookie, no JS token needed #}
+          <form method="POST" action="/billing/subscribe">
+            <input type="hidden" name="plan" value="{{ key }}">
+            <button
+              type="submit"
+              class="btn plan-submit-btn {% if key == 'professional' %}btn-primary{% else %}btn-outline{% endif %}"
+              onclick="this.textContent='Redirecting…'; this.disabled=true;"
+            >
+              {% if active %}Switch to {{ plan.name }}{% else %}Get {{ plan.name }}{% endif %}
+            </button>
+          </form>
         {% endif %}
       </div>
       {% endfor %}
     </div>
 
-    <!-- Cancel section (only shown if active) -->
+    {# ── CANCEL ────────────────────────────────────────────────────────────── #}
+    {#
+      Cancel also uses a form POST to /billing/cancel (billing_cancel_page in main.py).
+      Same reason: server reads the httpOnly cookie directly.
+      Route: POST /billing/cancel  → cancels Paddle subscription → redirect /billing
+    #}
     {% if active %}
     <div class="cancel-section">
       <h3>Cancel Subscription</h3>
       <p>Your account reverts to the free tier (10 reservations, 3 tables). All your data is preserved.</p>
-      <button class="btn btn-danger btn-sm" onclick="cancelSub(this)">Cancel Subscription</button>
+      <form method="POST" action="/billing/cancel"
+            onsubmit="return confirm('Cancel your subscription? You will keep access until the end of the billing period, then revert to the free tier.')">
+        <button type="submit" class="btn btn-danger btn-sm">Cancel Subscription</button>
+      </form>
     </div>
     {% endif %}
 
-  </div><!-- /billing-page -->
-
-  <!-- Toast -->
-  <div id="toast"></div>
-
-  <script>
-    function showToast(msg, type) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.className   = `show ${type}`;
-      setTimeout(() => { t.className = ''; }, 3200);
-    }
-
-    // ── Subscribe / Switch plan ───────────────────────────────────────────────
-    // POST /api/billing/checkout  { plan }  → { checkout_url, plan }
-    // Auth: reads JWT from httpOnly cookie via Authorization header fallback.
-    // Paddle sandbox redirects to checkout_url.
-    async function subscribe(plan, btn) {
-      const orig = btn.textContent;
-      btn.disabled    = true;
-      btn.textContent = 'Redirecting…';
-
-      // Extract JWT from httpOnly cookie (works when cookie is readable by JS;
-      // if httponly flag is set strictly, the server form-submit route is used instead).
-      // For the API route we need the token in the header.
-      const token = getCookie('access_token');
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/billing/checkout', {
-          method:  'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ plan }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          showToast(err.detail || 'Checkout failed. Please try again.', 'error');
-          btn.disabled    = false;
-          btn.textContent = orig;
-          return;
-        }
-
-        const data = await res.json();
-        if (data.checkout_url) {
-          window.location.href = data.checkout_url;
-        } else {
-          showToast('Could not open checkout. Please try again.', 'error');
-          btn.disabled    = false;
-          btn.textContent = orig;
-        }
-      } catch (e) {
-        showToast('Network error. Please try again.', 'error');
-        btn.disabled    = false;
-        btn.textContent = orig;
-      }
-    }
-
-    // ── Cancel subscription ───────────────────────────────────────────────────
-    // POST /api/billing/cancel  (no body)  → { cancelled: true }
-    // On success: reload to show updated free-tier banner.
-    async function cancelSub(btn) {
-      if (!confirm('Cancel your subscription? You will keep access until the end of the billing period, then revert to the free tier.')) return;
-
-      const orig = btn.textContent;
-      btn.disabled    = true;
-      btn.textContent = 'Cancelling…';
-
-      const token = getCookie('access_token');
-      if (!token) { window.location.href = '/login'; return; }
-
-      try {
-        const res = await fetch('/api/billing/cancel', {
-          method:  'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-
-        if (res.ok) {
-          showToast('Subscription cancelled.', 'success');
-          setTimeout(() => location.reload(), 1600);
-        } else {
-          const err = await res.json().catch(() => ({}));
-          showToast(err.detail || 'Failed to cancel. Contact support.', 'error');
-          btn.disabled    = false;
-          btn.textContent = orig;
-        }
-      } catch (e) {
-        showToast('Network error.', 'error');
-        btn.disabled    = false;
-        btn.textContent = orig;
-      }
-    }
-
-    // Helper: read a cookie by name (works when httpOnly is NOT set, or for non-httponly cookies)
-    function getCookie(name) {
-      return document.cookie.split(';')
-        .map(c => c.trim())
-        .find(c => c.startsWith(name + '='))
-        ?.split('=').slice(1).join('=') || '';
-    }
-  </script>
+  </div>
 </body>
 </html>
