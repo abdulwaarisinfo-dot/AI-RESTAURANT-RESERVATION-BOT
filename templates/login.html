@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Log In — Tablely</title>
+  {% include "_base_styles.html" %}
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .auth-left {
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 40%, rgba(201,169,110,.08) 0%, transparent 70%),
+        var(--bg-2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 48px; position: relative; overflow: hidden;
+    }
+    .auth-left-grid {
+      position: absolute; inset: 0; opacity: .04;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+    .auth-showcase { position: relative; z-index: 1; text-align: center; }
+    .auth-tagline {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.4rem; font-weight: 300; color: var(--text);
+      line-height: 1.2; margin-bottom: 16px;
+    }
+    .auth-tagline em { font-style: italic; color: var(--gold); }
+    .auth-sub { font-size: .9rem; color: var(--text-2); max-width: 300px; margin: 0 auto 36px; line-height: 1.65; }
+
+    /* mini dashboard preview */
+    .mini-dash {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      text-align: left; max-width: 300px; margin: 0 auto;
+    }
+    .mini-dash-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .mini-dash-title { font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+    .mini-dash-live {
+      display: flex; align-items: center; gap: 5px;
+      font-size: .68rem; color: var(--green);
+    }
+    .live-dot {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    .mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .mini-stat { background: var(--bg-4); border-radius: var(--radius); padding: 10px; }
+    .mini-stat-val { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--text); }
+    .mini-stat-label { font-size: .65rem; color: var(--text-3); }
+    .mini-booking {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .mini-booking:last-child { border-bottom: none; }
+    .mini-booking-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+    .mini-booking-info { flex: 1; }
+    .mini-booking-name { font-size: .8rem; color: var(--text); }
+    .mini-booking-time { font-size: .7rem; color: var(--text-3); }
+    .mini-booking-badge { font-size: .65rem; padding: 2px 7px; }
+
+    .auth-right {
+      display: flex; align-items: center; justify-content: center;
+      padding: 48px 32px; background: var(--bg);
+    }
+    .auth-form-box { width: 100%; max-width: 380px; }
+    .auth-form-header { margin-bottom: 32px; }
+    .auth-form-title { font-size: 2rem; color: var(--text); margin-bottom: 6px; }
+    .auth-form-sub { font-size: .88rem; color: var(--text-2); }
+    .auth-form-sub a { color: var(--gold); }
+    .auth-form { display: flex; flex-direction: column; gap: 16px; }
+    .form-forgot { text-align: right; margin-top: -8px; }
+    .form-forgot a { font-size: .78rem; color: var(--text-3); }
+    .form-forgot a:hover { color: var(--gold); }
+
+    @media (max-width: 768px) {
+      .auth-page { grid-template-columns: 1fr; }
+      .auth-left { display: none; }
+      .auth-right { min-height: 100vh; padding: 32px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/">
+      <div class="nav-brand-dot"></div>
+      Tablely
+    </a>
+    <div class="nav-links">
+      <a href="/signup">Create account</a>
+    </div>
+  </nav>
+
+  <div class="auth-page" style="padding-top:60px;">
+    <!-- LEFT PANEL — preview -->
+    <div class="auth-left">
+      <div class="auth-left-grid"></div>
+      <div class="auth-showcase">
+        <h2 class="auth-tagline">Welcome<br><em>back</em></h2>
+        <p class="auth-sub">Your restaurant dashboard is waiting — real-time bookings, guest CRM, and AI agent all in one place.</p>
+
+        <div class="mini-dash">
+          <div class="mini-dash-header">
+            <span class="mini-dash-title">Today's Overview</span>
+            <span class="mini-dash-live"><span class="live-dot"></span> Live</span>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat">
+              <div class="mini-stat-val">18</div>
+              <div class="mini-stat-label">Bookings today</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-val">6</div>
+              <div class="mini-stat-label">Tables active</div>
+            </div>
+          </div>
+          <div class="mini-booking">
+            <div class="mini-booking-dot"></div>
+            <div class="mini-booking-info">
+              <div class="mini-booking-name">Sarah Johnson</div>
+              <div class="mini-booking-time">Table 4 · 7:30 PM · 4 guests</div>
+            </div>
+            <span class="badge badge-green mini-booking-badge">Confirmed</span>
+          </div>
+          <div class="mini-booking">
+            <div class="mini-booking-dot"></div>
+            <div class="mini-booking-info">
+              <div class="mini-booking-name">Marcus Lee</div>
+              <div class="mini-booking-time">Table 2 · 8:00 PM · 2 guests</div>
+            </div>
+            <span class="badge badge-green mini-booking-badge">Confirmed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT — form -->
+    <div class="auth-right">
+      <div class="auth-form-box">
+        <div class="auth-form-header">
+          <h1 class="auth-form-title">Log In</h1>
+          <p class="auth-form-sub">New to Tablely? <a href="/signup">Create an account</a></p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error" style="margin-bottom:20px;">{{ error }}</div>
+        {% endif %}
+
+        <form class="auth-form" method="POST" action="/login">
+          <div class="form-group">
+            <label class="form-label">Email Address</label>
+            <input class="form-input" type="email" name="email"
+                   placeholder="you@restaurant.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-input" type="password" name="password"
+                   placeholder="Your password" required autocomplete="current-password" />
+          </div>
+          <div class="form-forgot">
+            <a href="#">Forgot password?</a>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%;">
+            Log In →
+          </button>
+        </form>
+
+        <div style="text-align:center;margin-top:24px;">
+          <a href="/signup" class="btn btn-ghost" style="width:100%;">
+            Create new account
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
