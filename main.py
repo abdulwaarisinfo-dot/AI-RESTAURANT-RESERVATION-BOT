@@ -309,10 +309,18 @@ def decode_jwt(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Invalid token.")
 
-def get_current_owner(creds: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    if not creds:
-        raise HTTPException(401, "Not authenticated.")
-    return decode_jwt(creds.credentials)
+def get_current_owner(
+    request: Request,
+    creds: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
+    # 1. Bearer token (API / external clients)
+    if creds and creds.credentials:
+        return decode_jwt(creds.credentials)
+    # 2. httponly cookie (browser — Jinja2 pages / CRM fetch calls)
+    token = request.cookies.get("access_token")
+    if token:
+        return decode_jwt(token)
+    raise HTTPException(401, "Not authenticated.")
 
 def get_owner_from_cookie(request: Request) -> Optional[dict]:
     token = request.cookies.get("access_token")
