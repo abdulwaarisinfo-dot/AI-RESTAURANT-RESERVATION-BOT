@@ -1,5 +1,5 @@
 # ============================================================
-# AI RESTAURANT RESERVATION BOT  v4.1
+# AI RESTAURANT RESERVATION BOT  v4.2
 # ============================================================
 # FEATURES:
 #   - Signup / Login with JWT (bcrypt + rate limiting)
@@ -8,13 +8,28 @@
 #   - Per-restaurant isolated MongoDB databases
 #   - CRM: CRUD for guests, tables, reservations
 #   - TIME SLOTS: Owner defines per-table slots (bulk or individual)
+#     ↳ NO slot horizon limits — owners can schedule any date on any plan
 #   - AI Sales Agent (Claude) — multi-turn, slot-aware, smart CRM reader
+#     ↳ Context loads for the EXACT date guest mentioned (token-efficient)
+#     ↳ Advanced NL date parsing: "next Thursday", "this Friday",
+#       "in 3 days", "next week", "end of month", day names, etc.
+#     ↳ Unknown / off-topic questions handled gracefully
 #   - WebSocket real-time dashboard updates
 #   - Admin dashboard + Jinja2 HTML pages
 #   - Plan-based reservation limits (enforced server-side)
-#   - Plan-based slot horizon: Free=1d, Starter=7d, Pro=12d, Ent=21d
-#     (rolling: today + N days ahead, owner can define slots within window)
 #   - Security: CSRF, rate limiting, helmet headers
+# ============================================================
+# CHANGES FROM v4.1 → v4.2:
+#   1. Removed slot horizon enforcement entirely — owners on all
+#      plans (including Free) may define slots for any future date.
+#   2. Date NLP upgraded: now resolves "next Thursday", "this Friday",
+#      "next week", "in N days", "end of month", "a week from today",
+#      ordinal dates ("the 15th"), and full natural phrases.
+#   3. CRM context now loads aligned to the first date mentioned in
+#      the guest's message — context stays compact and relevant.
+#   4. AI system prompt updated with an explicit off-topic handler:
+#      unknown questions (menu, prices, directions, etc.) are redirected
+#      to the restaurant directly, keeping the bot focused on bookings.
 # ============================================================
 
 from fastapi import (
@@ -49,6 +64,7 @@ import json
 import asyncio
 import hmac
 import hashlib
+import re
 
 # ============================================================
 # INITIAL SETUP
@@ -76,13 +92,11 @@ JWT_EXPIRE_DAYS       = 30
 FREE_RESERVATIONS     = 10
 FREE_TABLES_MAX       = 3
 
-# ============================================================
-# SLOT HORIZON — how many days ahead an owner can define slots
-# Rolling window: always today + N calendar days (inclusive of today).
-# Example free: owner can open slots for today and tomorrow only.
-# When tomorrow passes, they gain the day after automatically.
-# ============================================================
-FREE_SLOT_HORIZON_DAYS = 1   # today + 1 = 2 calendar days visible
+# NOTE v4.2: Slot horizon limits have been REMOVED.
+# Owners on all plans may define time slots for any future date.
+# The FREE_SLOT_HORIZON_DAYS constant is retained only for
+# backward compatibility with any tooling that reads it.
+FREE_SLOT_HORIZON_DAYS = 999  # effectively unlimited
 
 # Paddle config (works in Pakistan + internationally)
 PADDLE_VENDOR_ID      = os.getenv("PADDLE_VENDOR_ID", "")
@@ -104,7 +118,7 @@ PLANS = {
         "price_month":        29,
         "reservations_month": 1200,
         "tables_max":         10,
-        "slot_horizon_days":  7,    # can define slots up to 7 days ahead
+        "slot_horizon_days":  999,   # v4.2: unlimited
         "paddle_price_id":    os.getenv("PADDLE_PRICE_STARTER", "pri_starter"),
         "color":              "#6366f1",
         "features": [
@@ -112,7 +126,7 @@ PLANS = {
             "Up to 10 tables",
             "AI booking agent",
             "Basic CRM",
-            "7-day slot scheduling",
+            "Unlimited slot scheduling",
             "Email support",
         ],
     },
@@ -121,7 +135,7 @@ PLANS = {
         "price_month":        59,
         "reservations_month": 1600,
         "tables_max":         25,
-        "slot_horizon_days":  12,   # can define slots up to 12 days ahead
+        "slot_horizon_days":  999,   # v4.2: unlimited
         "paddle_price_id":    os.getenv("PADDLE_PRICE_PRO", "pri_pro"),
         "color":              "#f59e0b",
         "features": [
@@ -129,7 +143,7 @@ PLANS = {
             "Up to 25 tables",
             "AI booking agent",
             "Full CRM + guest history",
-            "12-day slot scheduling",
+            "Unlimited slot scheduling",
             "Priority support",
         ],
     },
@@ -138,7 +152,7 @@ PLANS = {
         "price_month":        99,
         "reservations_month": 2000,
         "tables_max":         999,
-        "slot_horizon_days":  21,   # can define slots up to 21 days ahead
+        "slot_horizon_days":  999,   # v4.2: unlimited
         "paddle_price_id":    os.getenv("PADDLE_PRICE_ENT", "pri_ent"),
         "color":              "#10b981",
         "features": [
@@ -146,7 +160,7 @@ PLANS = {
             "Unlimited tables",
             "AI booking agent",
             "Full CRM + analytics",
-            "21-day slot scheduling",
+            "Unlimited slot scheduling",
             "24/7 dedicated support",
         ],
     },
@@ -176,7 +190,7 @@ def rate_limit(ip: str, max_calls: int = 20, window_sec: int = 60) -> bool:
 
 app = FastAPI(
     title="AI Restaurant Reservation Bot",
-    version="4.1.0",
+    version="4.2.0",
     description="Multi-tenant reservation system with Paddle billing, Time Slots, and AI agent.",
     docs_url="/api/docs",
 )
@@ -333,7 +347,7 @@ class BulkTimeSlotsIn(BaseModel):
     System auto-generates all slots between start and end.
     Owner can do 1 table or 10 tables at once — their choice.
     Unlimited slots allowed (plan limits only affect reservations).
-    Date must be within the plan's slot horizon window.
+    v4.2: Date horizon limits removed — any future date is valid.
     """
     table_ids:     List[str]
     date:          str          # YYYY-MM-DD
@@ -436,46 +450,36 @@ def _can_access_dashboard(owner_doc: dict) -> bool:
 
 # ============================================================
 # SLOT HORIZON HELPERS
+# v4.2: Horizon enforcement removed. Helpers retained for API
+# compatibility but _check_slot_horizon always returns True.
 # ============================================================
 
 def _get_slot_horizon_days(owner_doc: dict) -> int:
     """
-    Returns how many days ahead the owner can define/view time slots.
-    Rolling window — always relative to today (UTC).
-
-    Free tier : 1  → today + 1 day ahead  (2 calendar days total)
-    Starter   : 7  → today + 7 days ahead
-    Pro       : 12 → today + 12 days ahead
-    Enterprise: 21 → today + 21 days ahead
-
-    As each day passes the window rolls forward automatically —
-    no cron job needed. Free users always see today + tomorrow.
+    v4.2: Returns 999 (effectively unlimited) for all plans.
+    Slot scheduling restrictions have been removed — any owner
+    may define slots for any future date regardless of plan.
     """
-    if _is_free_tier(owner_doc):
-        return FREE_SLOT_HORIZON_DAYS
-    plan = _get_plan(owner_doc)
-    return plan.get("slot_horizon_days", FREE_SLOT_HORIZON_DAYS)
+    return 999
 
 
 def _slot_horizon_max_date(owner_doc: dict) -> str:
-    """Returns the latest date (YYYY-MM-DD) the owner can define slots for."""
-    days = _get_slot_horizon_days(owner_doc)
-    max_dt = datetime.now(timezone.utc).date() + timedelta(days=days)
+    """v4.2: Returns a far-future date (no effective limit)."""
+    max_dt = datetime.now(timezone.utc).date() + timedelta(days=999)
     return max_dt.strftime("%Y-%m-%d")
 
 
 def _check_slot_horizon(date_str: str, owner_doc: dict) -> bool:
     """
-    Returns True if date_str falls within today … today+horizon_days (inclusive).
-    Returns False if the date is in the past or beyond the plan's horizon.
+    v4.2: Always returns True (no horizon enforcement).
+    Only rejects dates that are in the past.
     """
     try:
         target = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return False
-    today   = datetime.now(timezone.utc).date()
-    max_day = today + timedelta(days=_get_slot_horizon_days(owner_doc))
-    return today <= target <= max_day
+    today = datetime.now(timezone.utc).date()
+    return target >= today
 
 
 # ============================================================
@@ -515,7 +519,7 @@ def _get_effective_limits(rdb: Database, owner_doc: dict) -> dict:
             "reservations_used":  used,
             "reservations_left":  max(0, FREE_RESERVATIONS - used),
             "tables_max":         FREE_TABLES_MAX,
-            "slot_horizon_days":  FREE_SLOT_HORIZON_DAYS,
+            "slot_horizon_days":  999,
             "slot_horizon_until": _slot_horizon_max_date(owner_doc),
         }
     plan        = _get_plan(owner_doc)
@@ -530,7 +534,7 @@ def _get_effective_limits(rdb: Database, owner_doc: dict) -> dict:
         "reservations_used":  used,
         "reservations_left":  max(0, plan["reservations_month"] - used),
         "tables_max":         plan["tables_max"],
-        "slot_horizon_days":  plan.get("slot_horizon_days", FREE_SLOT_HORIZON_DAYS),
+        "slot_horizon_days":  999,
         "slot_horizon_until": _slot_horizon_max_date(owner_doc),
     }
 
@@ -1246,19 +1250,10 @@ def api_cancel_reservation(res_id: str, owner=Depends(get_current_owner)):
 
 # ============================================================
 # TIME SLOTS API
-# Owner can add unlimited time slots per table per day,
-# BUT only within their plan's slot horizon window.
+# v4.2: Slot horizon enforcement REMOVED.
+# Owners may define slots for any future date on any plan.
 #
-# Horizon is rolling — always relative to today (UTC):
-#   Free      : today + 1 day  (2 calendar days)
-#   Starter   : today + 7 days
-#   Pro       : today + 12 days
-#   Enterprise: today + 21 days
-#
-# As each day passes the window shifts forward automatically.
-# No cron job needed — just a date comparison at request time.
-#
-# Reservation PLAN limits are enforced separately.
+# Reservation PLAN limits are still enforced separately.
 # If NO slots are defined for a date → bot says not taking reservations.
 # If slots exist but all booked → bot says fully booked.
 # ============================================================
@@ -1267,28 +1262,18 @@ def api_cancel_reservation(res_id: str, owner=Depends(get_current_owner)):
 def api_bulk_create_timeslots(body: BulkTimeSlotsIn, owner=Depends(get_current_owner)):
     """
     Owner sets time slots for one or multiple tables in one go.
-    Date must be within the plan's rolling slot horizon.
-
-    Free  tier: only today and tomorrow (horizon=1).
-    Starter   : up to 7 days ahead.
-    Pro       : up to 12 days ahead.
-    Enterprise: up to 21 days ahead.
-
-    The window rolls forward daily — no manual reset needed.
+    v4.2: No date horizon limits — any future date is accepted on all plans.
     Unlimited slots per table per day — only reservations count toward plan limits.
     """
     rdb, owner_doc = _sub_guard(owner)
 
-    # ── Slot horizon enforcement ──────────────────────────────
-    if not _check_slot_horizon(body.date, owner_doc):
-        horizon  = _get_slot_horizon_days(owner_doc)
-        max_date = _slot_horizon_max_date(owner_doc)
-        tier     = "Free tier" if _is_free_tier(owner_doc) else f"{_get_plan(owner_doc)['name']} plan"
-        raise HTTPException(
-            403,
-            f"{tier} allows scheduling slots up to {horizon} day(s) ahead "
-            f"(until {max_date}). Upgrade your plan to schedule further in advance.",
-        )
+    # Only reject past dates — no plan-based horizon restriction in v4.2
+    try:
+        target = datetime.strptime(body.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD.")
+    if target < datetime.now(timezone.utc).date():
+        raise HTTPException(400, "Cannot define slots for past dates.")
 
     generated = _generate_slots(body.start_time, body.end_time, body.duration_mins)
     if not generated:
@@ -1342,20 +1327,17 @@ def api_bulk_create_timeslots(body: BulkTimeSlotsIn, owner=Depends(get_current_o
 def api_add_single_timeslot(body: TimeSlotIn, owner=Depends(get_current_owner)):
     """
     Add a single custom time slot to a table on a date.
-    Date must be within the plan's rolling slot horizon.
+    v4.2: No date horizon limits — any future date is accepted on all plans.
     """
     rdb, owner_doc = _sub_guard(owner)
 
-    # ── Slot horizon enforcement ──────────────────────────────
-    if not _check_slot_horizon(body.date, owner_doc):
-        horizon  = _get_slot_horizon_days(owner_doc)
-        max_date = _slot_horizon_max_date(owner_doc)
-        tier     = "Free tier" if _is_free_tier(owner_doc) else f"{_get_plan(owner_doc)['name']} plan"
-        raise HTTPException(
-            403,
-            f"{tier} allows scheduling slots up to {horizon} day(s) ahead "
-            f"(until {max_date}). Upgrade your plan to schedule further in advance.",
-        )
+    # Only reject past dates — no plan-based horizon restriction in v4.2
+    try:
+        target = datetime.strptime(body.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "Invalid date format. Use YYYY-MM-DD.")
+    if target < datetime.now(timezone.utc).date():
+        raise HTTPException(400, "Cannot define slots for past dates.")
 
     table = rdb["tables"].find_one({"_id": ObjectId(body.table_id)})
     if not table:
@@ -1455,21 +1437,40 @@ def api_delete_single_slot(
 # ============================================================
 # AI SALES AGENT — Claude with full slot awareness
 #
-# TOKEN COST OPTIMISATION — _build_crm_context now works on
-# exactly ONE date at a time (the date the guest mentioned).
-# Previously the system prompt might accidentally pull all
-# stored dates; now it queries only the date provided by the
-# conversation, keeping the context compact and predictable.
+# v4.2 IMPROVEMENTS:
 #
-# The AI receives just enough information to answer the guest:
-#   • All tables + capacity  (static, tiny)
-#   • Slots for the ONE requested date + booked/available flag
-#   • Clear horizon boundary so it never offers dates beyond
-#     what the owner has opened for booking
+# 1. DATE NLP UPGRADE (_extract_date_from_message):
+#    Resolves rich natural language date expressions:
+#      "next Thursday"       → nearest upcoming Thursday
+#      "this Friday"         → this week's Friday (or next if past)
+#      "next week"           → Monday of next calendar week
+#      "in 3 days"           → today + 3
+#      "a week from today"   → today + 7
+#      "end of the month"    → last day of current month
+#      "the 15th"            → 15th of current or next month
+#      Ordinal day names     → "first", "second" of a month
+#      Relative months       → "next month"
+#    ISO dates and day names (Monday–Sunday) still supported.
+#    Falls back to today when nothing is detected.
+#
+# 2. CONTEXT LOADING ALIGNED TO MESSAGE:
+#    CRM context is loaded for the EXACT date extracted from the
+#    guest's current message, not bulk-loaded for all dates.
+#    This keeps prompt tokens minimal and context relevant.
+#
+# 3. OFF-TOPIC / UNKNOWN QUESTION HANDLING:
+#    The system prompt instructs the AI to gracefully redirect
+#    non-booking questions (menu, prices, parking, WiFi, etc.)
+#    to the restaurant directly, without confabulating answers.
+#
+# TOKEN COST OPTIMISATION — _build_crm_context works on exactly
+# ONE date at a time (the date the guest mentioned), keeping the
+# context compact and predictable.
 # ============================================================
 
 SYSTEM_PROMPT = """
 You are a warm, professional AI reservation agent for {restaurant_name}.
+Your SOLE purpose is to help guests make, confirm, or ask basic questions about reservations.
 
 ## YOUR CONVERSATION FLOW — follow in order:
 1. Greet the guest warmly.
@@ -1488,7 +1489,19 @@ You are a warm, professional AI reservation agent for {restaurant_name}.
 9. Call `create_booking` tool IMMEDIATELY.
 10. After tool succeeds, give final confirmation with booking reference.
 
-## CRITICAL RULES:
+## HANDLING OFF-TOPIC OR UNKNOWN QUESTIONS:
+If the guest asks something outside reservations — such as menu items, prices,
+parking, WiFi, dress code, dietary options, gift cards, opening hours, or any
+other restaurant detail — respond warmly but redirect them:
+
+  "That's a great question! For [topic], I'd recommend reaching out to the
+   restaurant directly — they'll be able to give you the most accurate answer.
+   Is there anything I can help you with regarding your reservation?"
+
+Do NOT guess, invent, or assume answers to questions you don't have data for.
+Only answer what is explicitly shown in the CRM CONTEXT below.
+
+## CRITICAL BOOKING RULES:
 - NEVER invent table IDs — only use table_id values from CRM CONTEXT below.
 - NEVER offer a time that is not in the DEFINED SLOTS for that table.
 - NEVER book a slot that is already marked as BOOKED in the context.
@@ -1533,67 +1546,208 @@ BOOKING_TOOL = {
 
 def _extract_date_from_message(message: str, history: list) -> Optional[str]:
     """
-    Lightweight date extractor — scans the latest user message and recent
-    history for a YYYY-MM-DD pattern or natural-language hints like
-    'tomorrow', 'today', 'Monday', etc.
+    v4.2 — Advanced natural-language date extractor.
 
-    Returns a YYYY-MM-DD string if found, else None.
-    This keeps token cost low: we only pull slots for the date the guest
-    actually mentioned, not every date in the database.
+    Resolves a wide range of natural language date expressions to YYYY-MM-DD.
+    All calculations are relative to today (UTC).
 
-    Natural language resolution:
-      'today'     → UTC today
-      'tomorrow'  → UTC today + 1
-      Day names   → nearest upcoming occurrence (Mon–Sun)
+    Supported patterns (examples):
+      Explicit ISO  : "2025-12-25"
+      today/tonight : today's date
+      tomorrow      : today + 1
+      "next Monday" : nearest upcoming Monday
+      "this Friday" : this week's Friday (or next if already past)
+      "next week"   : Monday of next calendar week
+      "in 3 days"   : today + 3
+      "in 2 weeks"  : today + 14
+      "a week from today" : today + 7
+      "next month"  : 1st of next month
+      "end of month": last day of current month
+      "the 15th"    : 15th of current month (or next if past)
+      Ordinal day   : "the third" → 3rd of current/next month
+      Month + day   : "December 25", "25 December", "Dec 25"
 
-    The AI itself handles full NL understanding; this function just gives
-    the backend a best-effort date to pre-load the correct slot context.
-    Falls back to today if nothing is detected.
+    Scans the latest user message first, then recent history (newest first).
+    Falls back to today's date if nothing is detected.
     """
-    import re
-
     today_utc = datetime.now(timezone.utc).date()
 
-    # 1. Explicit ISO date anywhere in recent history (newest first)
-    all_text = message + " " + " ".join(
-        m.content for m in reversed(history[-6:]) if m.role == "user"
-    )
+    # Aggregate text: current message + last 6 user turns, newest first
+    all_text = message
+    for m in reversed(history[-6:]):
+        if m.role == "user":
+            all_text += " " + m.content
+    lower = all_text.lower().strip()
+
+    # ── 1. Explicit ISO date ──────────────────────────────────────────────────
     iso_match = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", all_text)
     if iso_match:
         return iso_match.group(1)
 
-    # 2. Natural language keywords
-    lower = all_text.lower()
-    if "today" in lower:
+    # ── 2. today / tonight ───────────────────────────────────────────────────
+    if re.search(r"\btonight\b|\btoday\b", lower):
         return today_utc.strftime("%Y-%m-%d")
-    if "tomorrow" in lower:
+
+    # ── 3. tomorrow ──────────────────────────────────────────────────────────
+    if re.search(r"\btomorrow\b", lower):
         return (today_utc + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    # 3. Day-of-week names → nearest upcoming day
-    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    for i, day in enumerate(day_names):
-        if day in lower:
-            days_ahead = (i - today_utc.weekday()) % 7
-            if days_ahead == 0:
-                days_ahead = 7  # "Monday" when today is Monday → next Monday
-            return (today_utc + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    # ── 4. "in N days / weeks / months" ──────────────────────────────────────
+    m = re.search(r"\bin\s+(\d+)\s+(day|days|week|weeks|month|months)\b", lower)
+    if m:
+        n, unit = int(m.group(1)), m.group(2)
+        if "day" in unit:
+            return (today_utc + timedelta(days=n)).strftime("%Y-%m-%d")
+        if "week" in unit:
+            return (today_utc + timedelta(weeks=n)).strftime("%Y-%m-%d")
+        if "month" in unit:
+            # Approximate: add 30*n days
+            return (today_utc + timedelta(days=30 * n)).strftime("%Y-%m-%d")
 
-    # 4. Default — fall back to today (agent will ask guest to specify)
+    # ── 5. "a week from today / now" ─────────────────────────────────────────
+    if re.search(r"\ba week from\b", lower):
+        return (today_utc + timedelta(weeks=1)).strftime("%Y-%m-%d")
+    if re.search(r"\btwo weeks from\b", lower):
+        return (today_utc + timedelta(weeks=2)).strftime("%Y-%m-%d")
+
+    # ── 6. "end of (the) month" ──────────────────────────────────────────────
+    if re.search(r"\bend of (the )?month\b", lower):
+        # Last day of current month
+        if today_utc.month == 12:
+            last_day = today_utc.replace(year=today_utc.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            last_day = today_utc.replace(month=today_utc.month + 1, day=1) - timedelta(days=1)
+        return last_day.strftime("%Y-%m-%d")
+
+    # ── 7. "next month" ──────────────────────────────────────────────────────
+    if re.search(r"\bnext month\b", lower):
+        if today_utc.month == 12:
+            first_next = today_utc.replace(year=today_utc.year + 1, month=1, day=1)
+        else:
+            first_next = today_utc.replace(month=today_utc.month + 1, day=1)
+        return first_next.strftime("%Y-%m-%d")
+
+    # ── 8. "next week" ───────────────────────────────────────────────────────
+    if re.search(r"\bnext week\b", lower):
+        days_until_monday = (7 - today_utc.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        return (today_utc + timedelta(days=days_until_monday)).strftime("%Y-%m-%d")
+
+    # ── 9. "next <weekday>" / "this <weekday>" ────────────────────────────────
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    next_match = re.search(r"\bnext\s+(" + "|".join(day_names) + r")\b", lower)
+    if next_match:
+        target_dow = day_names.index(next_match.group(1))  # 0=Mon
+        days_ahead = (target_dow - today_utc.weekday() + 7) % 7
+        if days_ahead == 0:
+            days_ahead = 7  # "next Monday" when today IS Monday → next week
+        else:
+            days_ahead += 7  # "next" always means the week AFTER the upcoming one
+        return (today_utc + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    this_match = re.search(r"\bthis\s+(" + "|".join(day_names) + r")\b", lower)
+    if this_match:
+        target_dow = day_names.index(this_match.group(1))
+        days_ahead = (target_dow - today_utc.weekday()) % 7
+        if days_ahead == 0:
+            days_ahead = 7  # "this Monday" when today IS Monday → 7 days
+        return (today_utc + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    # ── 10. Bare weekday name (no "next"/"this" qualifier) ───────────────────
+    #        e.g. "Thursday", "on Friday", "Saturday evening"
+    bare_day = re.search(r"\b(" + "|".join(day_names) + r")\b", lower)
+    if bare_day:
+        target_dow = day_names.index(bare_day.group(1))
+        days_ahead = (target_dow - today_utc.weekday()) % 7
+        if days_ahead == 0:
+            days_ahead = 7
+        return (today_utc + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    # ── 11. "the Nth" ordinal day of month ───────────────────────────────────
+    ordinal_map = {
+        "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+        "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+        "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14,
+        "fifteenth": 15, "sixteenth": 16, "seventeenth": 17, "eighteenth": 18,
+        "nineteenth": 19, "twentieth": 20, "twenty-first": 21,
+        "twenty-second": 22, "twenty-third": 23, "twenty-fourth": 24,
+        "twenty-fifth": 25, "twenty-sixth": 26, "twenty-seventh": 27,
+        "twenty-eighth": 28, "twenty-ninth": 29, "thirtieth": 30,
+        "thirty-first": 31,
+    }
+    for word, day_num in ordinal_map.items():
+        if re.search(rf"\b{word}\b", lower):
+            try:
+                candidate = today_utc.replace(day=day_num)
+                if candidate < today_utc:
+                    # Roll to next month
+                    if today_utc.month == 12:
+                        candidate = candidate.replace(year=today_utc.year + 1, month=1)
+                    else:
+                        candidate = candidate.replace(month=today_utc.month + 1)
+                return candidate.strftime("%Y-%m-%d")
+            except ValueError:
+                pass  # Invalid day for this month
+
+    # ── 12. Numeric ordinal: "the 15th", "on 3rd", "23rd" ───────────────────
+    num_ord = re.search(r"\bthe\s+(\d{1,2})(?:st|nd|rd|th)?\b|\b(\d{1,2})(?:st|nd|rd|th)\b", lower)
+    if num_ord:
+        day_num = int(num_ord.group(1) or num_ord.group(2))
+        if 1 <= day_num <= 31:
+            try:
+                candidate = today_utc.replace(day=day_num)
+                if candidate < today_utc:
+                    if today_utc.month == 12:
+                        candidate = candidate.replace(year=today_utc.year + 1, month=1)
+                    else:
+                        candidate = candidate.replace(month=today_utc.month + 1)
+                return candidate.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
+    # ── 13. Month name + day number: "December 25", "Dec 25", "25 December" ─
+    month_names = {
+        "january": 1, "february": 2, "march": 3, "april": 4,
+        "may": 5, "june": 6, "july": 7, "august": 8,
+        "september": 9, "october": 10, "november": 11, "december": 12,
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4,
+        "jun": 6, "jul": 7, "aug": 8, "sep": 9, "sept": 9,
+        "oct": 10, "nov": 11, "dec": 12,
+    }
+    month_pattern = "|".join(month_names.keys())
+    m = re.search(
+        rf"\b({month_pattern})\s+(\d{{1,2}})\b|\b(\d{{1,2}})\s+({month_pattern})\b",
+        lower,
+    )
+    if m:
+        if m.group(1):
+            month_num = month_names[m.group(1)]
+            day_num   = int(m.group(2))
+        else:
+            day_num   = int(m.group(3))
+            month_num = month_names[m.group(4)]
+        try:
+            year = today_utc.year
+            candidate = today_utc.replace(year=year, month=month_num, day=day_num)
+            if candidate < today_utc:
+                candidate = candidate.replace(year=year + 1)
+            return candidate.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+
+    # ── 14. Fallback — return today (agent will ask guest to clarify) ─────────
     return today_utc.strftime("%Y-%m-%d")
 
 
 def _build_crm_context(rdb: Database, date: Optional[str] = None) -> str:
     """
     Token-efficient CRM context builder.
-
-    KEY CHANGE vs v4.0:
     Fetches slots for EXACTLY ONE DATE — the date extracted from the
-    guest's message. This cuts input tokens dramatically compared to
-    loading all future dates.
+    guest's message. This cuts input tokens dramatically.
 
-    A restaurant with 5 tables × 10 slots × 21 days = 1,050 slot lines.
-    With this approach: 5 tables × 10 slots for 1 date = 50 slot lines.
-    Token savings: ~95% on slot data for Enterprise plans.
+    A restaurant with 5 tables × 10 slots × future dates = hundreds of lines.
+    With this approach: 5 tables × 10 slots for 1 date = ~50 slot lines.
 
     The AI handles the conversation flow; it asks the guest for their
     date preference before the backend loads any slot context. Each
@@ -1661,6 +1815,7 @@ def _build_crm_context(rdb: Database, date: Optional[str] = None) -> str:
     lines.append("- Never offer a time not listed above for the requested date.")
     lines.append("- Match party size to table capacity (capacity >= party_size).")
     lines.append("- If guest wants a time not in the list → say it's not available.")
+    lines.append("- If guest asks non-booking questions → redirect to restaurant directly.")
 
     return "\n".join(lines)
 
@@ -1913,7 +2068,7 @@ def health():
     return {
         "status":    "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version":   "4.1.0",
+        "version":   "4.2.0",
     }
 
 
