@@ -72,6 +72,24 @@
       font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--gold);
     }
 
+    /* TOAST */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 9999; pointer-events: none;
+    }
+    .toast {
+      padding: 10px 16px; border-radius: var(--radius);
+      font-size: .83rem; color: #fff; opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .25s, transform .25s;
+      pointer-events: none;
+      max-width: 320px;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: var(--green, #5bb891); }
+    .toast.error   { background: #e55; }
+
     /* NEW BOOKING FLASH */
     @keyframes flash {
       0%   { background: rgba(91,184,145,.15); }
@@ -103,6 +121,7 @@
       <a href="/dashboard" class="active">Dashboard</a>
       <a href="/crm">CRM</a>
       <a href="/billing">Billing</a>
+      {# owner._id renders as the ObjectId string in Jinja2 #}
       <a href="/reserve/{{ owner._id }}" target="_blank" class="btn btn-outline btn-sm">Booking Page ↗</a>
       <a href="/logout" class="btn btn-ghost btn-sm">Log Out</a>
     </div>
@@ -155,6 +174,7 @@
           </div>
           <div style="font-size:.72rem;color:var(--text-3);margin-top:2px;">
             {% if is_free_tier %}
+              {# limits.reservations_left from _get_effective_limits() #}
               {{ limits.reservations_left }} of {{ free_reservations }} bookings left
             {% else %}
               {{ stats.month_pct }}% used this month
@@ -168,6 +188,7 @@
     <main class="main-content">
       <div>
         <h1 class="page-title">Dashboard</h1>
+        {# owner.restaurant_name and owner.owner_name come from the owners collection #}
         <p class="page-sub">{{ owner.restaurant_name }} &nbsp;·&nbsp; {{ owner.owner_name }}</p>
       </div>
 
@@ -187,22 +208,28 @@
       <div class="stats-row">
         <div class="stat-card card highlight">
           <div class="stat-label">Today's Bookings</div>
+          {# stats.today_reservations from dashboard_page() #}
           <div class="stat-value" id="today-count">{{ stats.today_reservations }}</div>
           <div class="stat-sub">Confirmed reservations</div>
         </div>
         <div class="stat-card card">
           <div class="stat-label">Total Guests</div>
+          {# stats.total_guests — count of guests collection #}
           <div class="stat-value">{{ stats.total_guests }}</div>
           <div class="stat-sub">In your CRM</div>
         </div>
         <div class="stat-card card">
           <div class="stat-label">Total Tables</div>
+          {# stats.total_tables — count of tables collection #}
           <div class="stat-value">{{ stats.total_tables }}</div>
+          {# plan.tables_max — from _get_plan() which reads PLANS dict #}
           <div class="stat-sub">/ {{ plan.tables_max }} max</div>
         </div>
         <div class="stat-card card">
           <div class="stat-label">All Reservations</div>
+          {# stats.total_reservations — total count regardless of status #}
           <div class="stat-value">{{ stats.total_reservations }}</div>
+          {# stats.cancelled — count of cancelled reservations #}
           <div class="stat-sub">{{ stats.cancelled }} cancelled</div>
         </div>
       </div>
@@ -215,16 +242,19 @@
               {% if is_free_tier %}Free Tier Usage{% else %}Monthly Reservations{% endif %}
             </div>
             <div class="usage-nums" style="margin-top:4px;">
+              {# stats.month_count = limits.reservations_used from _get_effective_limits() #}
               <strong>{{ stats.month_count }}</strong> of {{ stats.month_limit }}
               {% if is_free_tier %}total free bookings used{% else %}used this month{% endif %}
               &nbsp;·&nbsp; <span style="color:var(--text-3);">{{ stats.month_pct }}%</span>
             </div>
           </div>
+          {# Badge colour thresholds match the progress bar thresholds below #}
           <span class="badge {% if stats.month_pct >= 90 %}badge-red{% elif stats.month_pct >= 70 %}badge-gold{% else %}badge-green{% endif %}">
             {{ stats.month_limit - stats.month_count }} remaining
           </span>
         </div>
         <div class="progress-bar">
+          {# danger / warning CSS modifier drives colour; width is the percentage #}
           <div class="progress-fill {% if stats.month_pct >= 90 %}danger{% elif stats.month_pct >= 70 %}warning{% endif %}"
                style="width:{{ stats.month_pct }}%;"></div>
         </div>
@@ -259,12 +289,26 @@
             <tbody id="recent-tbody">
               {% for r in recent_res %}
               <tr>
+                {#
+                  r.id is set via  r["id"] = str(r.pop("_id"))  in dashboard_page().
+                  Slice [:8] and upper() done in template, matching the WS broadcast
+                  which sends  res_id[:8].upper()  from the server side.
+                #}
                 <td style="font-family:monospace;font-size:.78rem;color:var(--text-3);">{{ r.id[:8] | upper }}</td>
+                {#
+                  r.table_id is the raw ObjectId string stored in the reservation doc.
+                  Truncated to 6 chars + ellipsis for display.
+                #}
                 <td style="font-family:monospace;font-size:.75rem;color:var(--text-3);">{{ r.table_id[:6] }}…</td>
                 <td>{{ r.date }}</td>
                 <td>{{ r.time_slot }}</td>
                 <td>{{ r.party_size }} pax</td>
                 <td>
+                  {#
+                    r.source is set to "ai_agent" for AI bookings, or absent/None
+                    for manual CRM entries. The  or 'manual'  fallback matches
+                    the  "source": "ai_agent"  field written by _execute_booking_tool().
+                  #}
                   <span class="badge {% if r.source == 'ai_agent' %}badge-gold{% else %}badge-muted{% endif %}">
                     {{ r.source or 'manual' }}
                   </span>
@@ -290,9 +334,19 @@
           </div>
           {% for g in top_guests %}
           <div class="guest-row">
+            {#
+              g.name[0] — first character of guest name for avatar initials.
+              g.name is set from the guests collection; the  | upper  filter
+              ensures it's capitalised even if stored lowercase.
+            #}
             <div class="guest-avatar">{{ g.name[0] | upper }}</div>
             <div class="guest-info">
               <div class="guest-name">{{ g.name }}</div>
+              {#
+                g.visit_count is incremented each time a reservation is made
+                (both via CRM API and AI agent _execute_booking_tool).
+                Pluralisation: 'visits' if count != 1 else 'visit'.
+              #}
               <div class="guest-visits">{{ g.visit_count }} visit{{ 's' if g.visit_count != 1 else '' }}</div>
             </div>
             <div class="guest-count">{{ g.visit_count }}</div>
@@ -308,8 +362,48 @@
     </main>
   </div>
 
+  <!-- TOAST CONTAINER (was missing — showToast() requires this) -->
+  <div class="toast-container" id="toast-container"></div>
+
   <script>
-    // ── WebSocket — live dashboard updates ──
+    // ── Toast helper ──────────────────────────────────────────────────────────
+    // showToast() was called in handleNewBooking() but was never defined.
+    // Added here to match the call site: showToast(message, 'success' | 'error')
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast     = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      // Trigger CSS transition
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => toast.classList.add('show'));
+      });
+
+      // Auto-dismiss after 4 s
+      setTimeout(() => {
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+      }, 4000);
+    }
+
+    // ── WebSocket — live dashboard updates ───────────────────────────────────
+    //
+    // restaurant_id is the string form of owner._id (ObjectId rendered as str).
+    // The WS endpoint is:  /ws/dashboard/{restaurant_id}  — defined in main.py.
+    // The server broadcasts JSON with shape:
+    //   {
+    //     type:           "new_booking",
+    //     reservation_id: res_id[:8].upper(),   ← 8-char uppercase ref
+    //     guest_name:     str,
+    //     date:           "YYYY-MM-DD",
+    //     time_slot:      "HH:MM",
+    //     party_size:     int,
+    //     timestamp:      ISO string,
+    //   }
+    // or { type: "ping" } every 30 s (asyncio.sleep(30) in ws_dashboard).
+    //
     const restaurantId = '{{ owner._id }}';
     let ws;
 
@@ -328,22 +422,24 @@
     }
 
     function handleNewBooking(data) {
-      // Update today count
+      // Update today's confirmed count (+1 per new booking)
       const todayEl = document.getElementById('today-count');
       if (todayEl) {
-        const current = parseInt(todayEl.textContent) || 0;
+        const current = parseInt(todayEl.textContent, 10) || 0;
         todayEl.textContent = current + 1;
       }
 
-      // Prepend row to recent table
+      // Prepend new row to the recent reservations table
       const tbody = document.getElementById('recent-tbody');
       if (tbody) {
-        // Remove "no reservations" placeholder if present
+        // Remove "no reservations" placeholder row if present
         const placeholder = tbody.querySelector('td[colspan]');
         if (placeholder) placeholder.closest('tr').remove();
 
         const tr = document.createElement('tr');
         tr.className = 'new-booking-flash';
+
+        // data.reservation_id is already res_id[:8].upper() from the broadcast
         tr.innerHTML = `
           <td style="font-family:monospace;font-size:.78rem;color:var(--text-3);">${data.reservation_id}</td>
           <td style="font-family:monospace;font-size:.75rem;color:var(--text-3);">—</td>
@@ -353,10 +449,12 @@
           <td><span class="badge badge-gold">ai_agent</span></td>
         `;
         tbody.insertBefore(tr, tbody.firstChild);
-        // Keep max 8 rows
+
+        // Keep table to a max of 8 rows (matches the .limit(8) query in dashboard_page)
         while (tbody.rows.length > 8) tbody.deleteRow(tbody.rows.length - 1);
       }
 
+      // Toast uses guest_name and time_slot from the WS broadcast payload
       showToast(`New booking: ${data.guest_name} · ${data.time_slot}`, 'success');
     }
 
