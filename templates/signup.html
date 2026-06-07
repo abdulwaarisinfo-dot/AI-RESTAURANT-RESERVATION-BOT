@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Sign Up — Tablely</title>
+  {% include "_base_styles.html" %}
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .auth-left {
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 40%, rgba(201,169,110,.1) 0%, transparent 70%),
+        var(--bg-2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 48px;
+      position: relative; overflow: hidden;
+    }
+    .auth-left-grid {
+      position: absolute; inset: 0; opacity: .04;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+    .auth-brand {
+      position: relative; z-index: 1;
+      text-align: center;
+    }
+    .auth-brand-logo {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      font-family: 'Cormorant Garamond', serif; font-size: 1.5rem;
+      color: var(--text); margin-bottom: 40px;
+    }
+    .auth-tagline {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.2rem; font-weight: 300;
+      color: var(--text); line-height: 1.2; margin-bottom: 16px;
+    }
+    .auth-tagline em { font-style: italic; color: var(--gold); }
+    .auth-sub { font-size: .9rem; color: var(--text-2); line-height: 1.65; max-width: 320px; margin: 0 auto; }
+    .auth-stats {
+      display: flex; gap: 32px; margin-top: 48px;
+    }
+    .auth-stat { text-align: center; }
+    .auth-stat-val {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem; color: var(--gold);
+    }
+    .auth-stat-label { font-size: .75rem; color: var(--text-3); letter-spacing: .05em; }
+
+    .auth-right {
+      display: flex; align-items: center; justify-content: center;
+      padding: 48px 32px;
+      background: var(--bg);
+    }
+    .auth-form-box { width: 100%; max-width: 420px; }
+    .auth-form-header { margin-bottom: 32px; }
+    .auth-form-title {
+      font-size: 1.9rem; color: var(--text); margin-bottom: 6px;
+    }
+    .auth-form-sub { font-size: .88rem; color: var(--text-2); }
+    .auth-form-sub a { color: var(--gold); }
+    .auth-form { display: flex; flex-direction: column; gap: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .auth-footer-text {
+      text-align: center; font-size: .78rem; color: var(--text-3); margin-top: 20px;
+    }
+    .auth-footer-text a { color: var(--text-2); }
+
+    @media (max-width: 768px) {
+      .auth-page { grid-template-columns: 1fr; }
+      .auth-left { display: none; }
+      .auth-right { padding: 32px 20px; min-height: 100vh; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Minimal nav -->
+  <nav class="nav">
+    <a class="nav-brand" href="/">
+      <div class="nav-brand-dot"></div>
+      Tablely
+    </a>
+    <div class="nav-links">
+      <a href="/login">Already have an account?</a>
+    </div>
+  </nav>
+
+  <div class="auth-page" style="padding-top:60px;">
+    <!-- LEFT PANEL -->
+    <div class="auth-left">
+      <div class="auth-left-grid"></div>
+      <div class="auth-brand">
+        <div class="auth-brand-logo">
+          <div class="nav-brand-dot"></div>
+          Tablely
+        </div>
+        <h2 class="auth-tagline">Your restaurant,<br><em>fully automated</em></h2>
+        <p class="auth-sub">Set up your AI booking agent in minutes. Guests book 24/7 — you focus on the kitchen.</p>
+        <div class="auth-stats">
+          <div class="auth-stat">
+            <div class="auth-stat-val">2k+</div>
+            <div class="auth-stat-label">Reservations/mo</div>
+          </div>
+          <div class="auth-stat">
+            <div class="auth-stat-val">99%</div>
+            <div class="auth-stat-label">Uptime</div>
+          </div>
+          <div class="auth-stat">
+            <div class="auth-stat-val">AI</div>
+            <div class="auth-stat-label">Powered</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT FORM PANEL -->
+    <div class="auth-right">
+      <div class="auth-form-box">
+        <div class="auth-form-header">
+          <h1 class="auth-form-title">Create Account</h1>
+          <p class="auth-form-sub">Already registered? <a href="/login">Log in</a></p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error" style="margin-bottom:20px;">{{ error }}</div>
+        {% endif %}
+
+        <form class="auth-form" method="POST" action="/signup">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Restaurant Name</label>
+              <input class="form-input" type="text" name="restaurant_name"
+                     placeholder="The Grand Bistro" required autocomplete="organization" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Your Name</label>
+              <input class="form-input" type="text" name="owner_name"
+                     placeholder="Alex Smith" required autocomplete="name" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email Address</label>
+            <input class="form-input" type="email" name="email"
+                   placeholder="you@restaurant.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-input" type="password" name="password"
+                   placeholder="Minimum 8 characters" required autocomplete="new-password"
+                   minlength="8" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%;margin-top:4px;">
+            Create Account →
+          </button>
+        </form>
+
+        <p class="auth-footer-text">
+          By signing up, you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
