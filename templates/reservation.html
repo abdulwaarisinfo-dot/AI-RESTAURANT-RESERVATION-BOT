@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Reserve a Table — {{ restaurant_name }}</title>
+  {% include "_base_styles.html" %}
+  <style>
+    body { background: var(--bg); }
+
+    .reserve-page {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 80px 16px 32px;
+    }
+
+    /* HEADER */
+    .reserve-header { text-align: center; margin-bottom: 32px; }
+    .reserve-rest-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2.2rem; color: var(--text); margin-bottom: 6px;
+    }
+    .reserve-desc { font-size: .88rem; color: var(--text-2); }
+
+    /* CHAT WIDGET */
+    .chat-widget {
+      width: 100%; max-width: 560px;
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,.5), var(--shadow-gold);
+      display: flex; flex-direction: column;
+      height: 540px;
+    }
+    .chat-header {
+      padding: 16px 20px;
+      background: var(--bg-3); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .chat-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--gold-glow); border: 1px solid rgba(201,169,110,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; color: var(--gold); flex-shrink: 0;
+    }
+    .chat-agent-name { font-size: .9rem; color: var(--text); font-weight: 400; }
+    .chat-agent-sub { font-size: .75rem; color: var(--text-3); }
+    .chat-status {
+      margin-left: auto; display: flex; align-items: center; gap: 5px;
+      font-size: .72rem; color: var(--green);
+    }
+    .chat-status-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--green); animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.25} }
+
+    /* MESSAGES */
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .message { display: flex; flex-direction: column; max-width: 80%; }
+    .message.bot { align-self: flex-start; }
+    .message.user { align-self: flex-end; }
+    .message-bubble {
+      padding: 10px 14px; border-radius: 12px;
+      font-size: .88rem; line-height: 1.55;
+    }
+    .message.bot .message-bubble {
+      background: var(--bg-3); color: var(--text);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .message.user .message-bubble {
+      background: var(--gold); color: #0d0d0d;
+      border-bottom-right-radius: 4px;
+    }
+    .message-time {
+      font-size: .68rem; color: var(--text-3); margin-top: 4px; padding: 0 4px;
+    }
+    .message.user .message-time { text-align: right; }
+
+    /* TYPING INDICATOR */
+    .typing { display: flex; gap: 4px; align-items: center; padding: 12px 14px; }
+    .typing span {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--text-3);
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,80%,100%{transform:scale(.8);opacity:.4} 40%{transform:scale(1.1);opacity:1} }
+
+    /* CONFIRMATION CARD */
+    .booking-confirmed {
+      background: rgba(91,184,145,.08); border: 1px solid rgba(91,184,145,.3);
+      border-radius: 10px; padding: 14px; margin-top: 6px; max-width: 80%;
+    }
+    .booking-confirmed-label {
+      font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--green); margin-bottom: 6px;
+    }
+    .booking-confirmed-ref {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem; color: var(--text); margin-bottom: 2px;
+    }
+    .booking-confirmed-detail { font-size: .8rem; color: var(--text-2); }
+
+    /* INPUT */
+    .chat-input-area {
+      padding: 14px 16px;
+      background: var(--bg-3); border-top: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: flex-end;
+    }
+    .chat-input {
+      flex: 1; background: var(--bg-4); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px;
+      font-family: 'DM Sans', sans-serif; font-size: .9rem;
+      color: var(--text); outline: none; resize: none;
+      min-height: 42px; max-height: 100px;
+      transition: border-color var(--transition);
+      line-height: 1.5;
+    }
+    .chat-input:focus { border-color: var(--gold-dim); }
+    .chat-input::placeholder { color: var(--text-3); }
+    .chat-send {
+      width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+      background: var(--gold); border: none; cursor: pointer;
+      color: #0d0d0d; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all var(--transition);
+    }
+    .chat-send:hover { background: #d4b47a; }
+    .chat-send:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* QUICK REPLIES */
+    .quick-replies {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding: 0 16px 12px;
+      background: var(--bg-3); border-top: 1px solid var(--border);
+    }
+    .quick-reply {
+      padding: 5px 12px; border-radius: 100px;
+      border: 1px solid var(--border-hi); background: var(--bg-4);
+      font-size: .78rem; color: var(--text-2); cursor: pointer;
+      transition: all var(--transition);
+    }
+    .quick-reply:hover { border-color: var(--gold); color: var(--gold); }
+
+    .reserve-footer { margin-top: 20px; font-size: .78rem; color: var(--text-3); text-align: center; }
+    .reserve-footer a { color: var(--text-3); }
+
+    @media (max-width: 600px) {
+      .chat-widget { height: calc(100vh - 160px); border-radius: 12px; }
+      .reserve-header h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/">
+      <div class="nav-brand-dot"></div>
+      Tablely
+    </a>
+  </nav>
+
+  <div class="reserve-page">
+    <div class="reserve-header">
+      <div style="font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">◆ AI Booking Agent</div>
+      <h1 class="reserve-rest-name">{{ restaurant_name }}</h1>
+      <p class="reserve-desc">Chat with our AI agent to reserve your table in seconds.</p>
+    </div>
+
+    <div class="chat-widget">
+      <!-- Header -->
+      <div class="chat-header">
+        <div class="chat-avatar">◆</div>
+        <div>
+          <div class="chat-agent-name">{{ restaurant_name }}</div>
+          <div class="chat-agent-sub">AI Reservation Agent</div>
+        </div>
+        <div class="chat-status">
+          <div class="chat-status-dot"></div>
+          Online
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="chat-messages" id="chat-messages">
+        <!-- Initial bot message injected by JS -->
+      </div>
+
+      <!-- Quick replies (hidden after first message) -->
+      <div class="quick-replies" id="quick-replies">
+        <button class="quick-reply" onclick="sendQuick('Table for 2')">Table for 2</button>
+        <button class="quick-reply" onclick="sendQuick('Table for 4')">Table for 4</button>
+        <button class="quick-reply" onclick="sendQuick('Table for 6')">Table for 6</button>
+        <button class="quick-reply" onclick="sendQuick('Tonight')">Tonight</button>
+      </div>
+
+      <!-- Input -->
+      <div class="chat-input-area">
+        <textarea
+          class="chat-input" id="chat-input"
+          placeholder="Type your message…"
+          rows="1"
+          onkeydown="handleKey(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <button class="chat-send" id="send-btn" onclick="sendMessage()">↑</button>
+      </div>
+    </div>
+
+    <p class="reserve-footer">Powered by <a href="/">Tablely</a></p>
+  </div>
+
+  <script>
+    const restaurantId = '{{ restaurant_id }}';
+    let history = [];
+    let sessionId = 'sess_' + Math.random().toString(36).slice(2);
+    let sending = false;
+    let bookingMade = false;
+
+    const messagesEl = document.getElementById('chat-messages');
+    const inputEl    = document.getElementById('chat-input');
+    const sendBtn    = document.getElementById('send-btn');
+    const quickEl    = document.getElementById('quick-replies');
+
+    function now() {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function addMessage(role, text, extraHtml) {
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.innerHTML = `
+        <div class="message-bubble">${text.replace(/\n/g, '<br>')}</div>
+        ${extraHtml || ''}
+        <div class="message-time">${now()}</div>
+      `;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addTyping() {
+      const div = document.createElement('div');
+      div.className = 'message bot';
+      div.id = 'typing-indicator';
+      div.innerHTML = `<div class="message-bubble typing"><span></span><span></span><span></span></div>`;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    function removeTyping() {
+      document.getElementById('typing-indicator')?.remove();
+    }
+
+    function addConfirmCard(resId) {
+      const card = document.createElement('div');
+      card.className = 'booking-confirmed';
+      card.innerHTML = `
+        <div class="booking-confirmed-label">✓ Booking Confirmed</div>
+        <div class="booking-confirmed-ref">Ref: ${resId}</div>
+        <div class="booking-confirmed-detail">Your table is reserved. See you soon!</div>
+      `;
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function sendMessage(text) {
+      const msg = (text ?? inputEl.value).trim();
+      if (!msg || sending || bookingMade) return;
+
+      sending = true;
+      sendBtn.disabled = true;
+      inputEl.value = '';
+      inputEl.style.height = 'auto';
+      quickEl.style.display = 'none';
+
+      addMessage('user', msg);
+
+      addTyping();
+
+      try {
+        const res = await fetch(`/api/ai/chat?restaurant_id=${restaurantId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, message: msg, history }),
+        });
+
+        removeTyping();
+
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          addMessage('bot', e.detail || 'Sorry, something went wrong. Please try again.');
+        } else {
+          const data = await res.json();
+          addMessage('bot', data.reply);
+          history = data.history;
+
+          if (data.booking_made && data.reservation_id) {
+            bookingMade = true;
+            addConfirmCard(data.reservation_id.slice(0, 8).toUpperCase());
+            inputEl.disabled = true;
+            inputEl.placeholder = 'Your booking is confirmed ✓';
+            sendBtn.disabled = true;
+          }
+        }
+      } catch (e) {
+        removeTyping();
+        addMessage('bot', 'Connection error. Please check your internet and try again.');
+      } finally {
+        sending = false;
+        if (!bookingMade) sendBtn.disabled = false;
+      }
+    }
+
+    function sendQuick(text) { sendMessage(text); }
+
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    }
+
+    // Initial greeting
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        addMessage('bot', 'Hello! Welcome to {{ restaurant_name }}. I\'m your AI reservation agent.\n\nHow many guests will be dining with us today?');
+      }, 400);
+    });
+  </script>
+</body>
+</html>
