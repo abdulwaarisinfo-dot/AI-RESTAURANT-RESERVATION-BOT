@@ -1,8 +1,9 @@
 # ============================================================
-# AI RESTAURANT RESERVATION BOT  v3.0
+# AI RESTAURANT RESERVATION BOT  v3.1
 # ============================================================
 # FEATURES:
 #   - Signup / Login with JWT (bcrypt + rate limiting)
+#   - 10 FREE reservations after signup (no billing required)
 #   - Paddle billing — 3 plans, webhook, renewal, cancel
 #   - Per-restaurant isolated MongoDB databases
 #   - CRM: CRUD for guests, tables, reservations
@@ -68,6 +69,10 @@ JWT_SECRET            = os.getenv("JWT_SECRET", "change-me-in-production-use-256
 JWT_ALGORITHM         = "HS256"
 JWT_EXPIRE_DAYS       = 30
 
+# Free tier — no billing required
+FREE_RESERVATIONS     = 10
+FREE_TABLES_MAX       = 3
+
 # Paddle config (works in Pakistan + internationally)
 PADDLE_VENDOR_ID      = os.getenv("PADDLE_VENDOR_ID", "")
 PADDLE_API_KEY        = os.getenv("PADDLE_API_KEY", "")
@@ -81,7 +86,6 @@ security = HTTPBearer(auto_error=False)
 # ============================================================
 # PLANS CONFIGURATION
 # ============================================================
-# Easy to change prices/limits here — backend enforces automatically
 
 PLANS = {
     "starter": {
@@ -153,7 +157,7 @@ def rate_limit(ip: str, max_calls: int = 20, window_sec: int = 60) -> bool:
 
 app = FastAPI(
     title="AI Restaurant Reservation Bot",
-    version="3.0.0",
+    version="3.1.0",
     description="Multi-tenant reservation system with Paddle billing and AI agent.",
     docs_url="/api/docs",
 )
@@ -185,7 +189,6 @@ templates = Jinja2Templates(directory="templates")
 
 class ConnectionManager:
     def __init__(self):
-        # restaurant_id → list of connected websockets
         self.active: Dict[str, List[WebSocket]] = defaultdict(list)
 
     async def connect(self, ws: WebSocket, restaurant_id: str):
@@ -276,7 +279,7 @@ class ChatRequest(BaseModel):
     history:    List[ChatMessage] = []
 
 class SubscribeRequest(BaseModel):
-    plan: str   # "starter" | "professional" | "enterprise"
+    plan: str
 
 # ============================================================
 # AUTH HELPERS
@@ -328,32 +331,99 @@ def _get_plan(owner_doc: dict) -> dict:
     return PLANS.get(plan_key, PLANS["starter"])
 
 # ============================================================
+# FREE TIER HELPERS
+# ============================================================
+
+def _is_free_tier(owner_doc: dict) -> bool:
+    """Returns True if owner has no active paid subscription."""
+    return not _subscription_active(owner_doc)
+
+def _free_reservations_used(rdb: Database) -> int:
+    """Count all-time confirmed reservations for free tier check."""
+    return rdb["reservations"].count_documents({"status": "confirmed"})
+
+def _free_reservations_remaining(rdb: Database) -> int:
+    used = _free_reservations_used(rdb)
+    return max(0, FREE_RESERVATIONS - used)
+
+def _can_access_dashboard(owner_doc: dict) -> bool:
+    """
+    Free tier owners can access dashboard without billing.
+    Returns True if active subscription OR free tier (not yet expired).
+    """
+    if _subscription_active(owner_doc):
+        return True
+    # Allow free tier access always — limits enforced at reservation creation
+    return True
+
+# ============================================================
 # PLAN ENFORCEMENT HELPERS
 # ============================================================
 
 def _check_reservation_limit(rdb: Database, owner_doc: dict) -> bool:
-    """Returns True if under monthly reservation limit."""
+    """
+    Returns True if allowed to make another reservation.
+    Free tier: up to FREE_RESERVATIONS total (all-time).
+    Paid tier: monthly limit from plan.
+    """
+    if _is_free_tier(owner_doc):
+        used = _free_reservations_used(rdb)
+        return used < FREE_RESERVATIONS
+
+    # Paid plan — monthly limit
     plan  = _get_plan(owner_doc)
     limit = plan["reservations_month"]
-    month_start = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    month_start = (datetime.now(timezone.utc) - timedelta(days=30))
     count = rdb["reservations"].count_documents({
         "status":     "confirmed",
-        "created_at": {"$gte": datetime.strptime(month_start, "%Y-%m-%d").replace(tzinfo=timezone.utc)},
+        "created_at": {"$gte": month_start},
     })
     return count < limit
 
 def _check_table_limit(rdb: Database, owner_doc: dict) -> bool:
+    """
+    Free tier: up to FREE_TABLES_MAX tables.
+    Paid tier: plan table limit.
+    """
+    if _is_free_tier(owner_doc):
+        count = rdb["tables"].count_documents({})
+        return count < FREE_TABLES_MAX
+
     plan  = _get_plan(owner_doc)
     limit = plan["tables_max"]
     count = rdb["tables"].count_documents({})
     return count < limit
+
+def _get_effective_limits(rdb: Database, owner_doc: dict) -> dict:
+    """Returns the effective limits and usage for the current owner."""
+    if _is_free_tier(owner_doc):
+        used = _free_reservations_used(rdb)
+        return {
+            "tier":               "free",
+            "reservations_limit": FREE_RESERVATIONS,
+            "reservations_used":  used,
+            "reservations_left":  max(0, FREE_RESERVATIONS - used),
+            "tables_max":         FREE_TABLES_MAX,
+        }
+    plan = _get_plan(owner_doc)
+    month_start = (datetime.now(timezone.utc) - timedelta(days=30))
+    used = rdb["reservations"].count_documents({
+        "status":     "confirmed",
+        "created_at": {"$gte": month_start},
+    })
+    return {
+        "tier":               "paid",
+        "reservations_limit": plan["reservations_month"],
+        "reservations_used":  used,
+        "reservations_left":  max(0, plan["reservations_month"] - used),
+        "tables_max":         plan["tables_max"],
+    }
 
 # ============================================================
 # PADDLE BILLING HELPERS
 # ============================================================
 
 async def paddle_create_checkout(owner_doc: dict, plan_key: str) -> dict:
-    """Create a Paddle checkout session and return checkout URL."""
     plan = PLANS.get(plan_key)
     if not plan:
         raise HTTPException(400, "Invalid plan.")
@@ -384,9 +454,8 @@ async def paddle_create_checkout(owner_doc: dict, plan_key: str) -> dict:
     return r.json()
 
 def verify_paddle_webhook(payload: bytes, signature: str) -> bool:
-    """Verify Paddle webhook signature."""
     if not PADDLE_WEBHOOK_SECRET:
-        return True  # Skip in dev
+        return True
     expected = hmac.new(
         PADDLE_WEBHOOK_SECRET.encode(),
         payload,
@@ -417,7 +486,6 @@ def signup_form(
     email:           str = Form(...),
     password:        str = Form(...),
 ):
-    # Rate limit by IP
     ip = request.client.host
     if not rate_limit(ip, max_calls=5, window_sec=300):
         return templates.TemplateResponse("signup.html", {
@@ -442,26 +510,28 @@ def signup_form(
 
     restaurant_id = str(ObjectId())
     col.insert_one({
-        "_id":                   ObjectId(restaurant_id),
-        "restaurant_name":       restaurant_name,
-        "owner_name":            owner_name,
-        "email":                 email.lower(),
-        "password_hash":         hash_password(password),
-        "created_at":            datetime.now(timezone.utc),
-        "subscription_status":   "inactive",
-        "plan":                  "starter",
-        "paddle_customer_id":    None,
+        "_id":                    ObjectId(restaurant_id),
+        "restaurant_name":        restaurant_name,
+        "owner_name":             owner_name,
+        "email":                  email.lower(),
+        "password_hash":          hash_password(password),
+        "created_at":             datetime.now(timezone.utc),
+        "subscription_status":    "inactive",
+        "plan":                   "starter",
+        "paddle_customer_id":     None,
         "paddle_subscription_id": None,
+        "free_tier":              True,   # flag for free tier tracking
     })
 
     token, _ = create_jwt(restaurant_id, email.lower())
-    response  = RedirectResponse("/billing", status_code=302)
+    # ── After signup → go straight to dashboard (free tier, no billing wall) ──
+    response = RedirectResponse("/dashboard", status_code=302)
     response.set_cookie(
         "access_token", token,
         httponly=True, samesite="lax",
         max_age=JWT_EXPIRE_DAYS * 86400,
     )
-    logger.info(f"Signed up: {email} ({restaurant_id})")
+    logger.info(f"Signed up (free tier): {email} ({restaurant_id})")
     return response
 
 @app.get("/login", response_class=HTMLResponse, tags=["Pages"])
@@ -492,7 +562,8 @@ def login_form(
 
     restaurant_id = str(owner["_id"])
     token, _      = create_jwt(restaurant_id, email.lower())
-    response      = RedirectResponse("/dashboard", status_code=302)
+    # ── Always go to dashboard — free tier can access it ──
+    response = RedirectResponse("/dashboard", status_code=302)
     response.set_cookie(
         "access_token", token,
         httponly=True, samesite="lax",
@@ -514,6 +585,8 @@ def billing_page(request: Request):
     db    = get_platform_db()
     owner = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
     current_plan = owner.get("plan", "starter")
+    rdb   = get_owner_db(owner_jwt["sub"])
+    limits = _get_effective_limits(rdb, owner)
     return templates.TemplateResponse("billing.html", {
         "request":      request,
         "owner":        owner,
@@ -521,7 +594,75 @@ def billing_page(request: Request):
         "plans":        PLANS,
         "current_plan": current_plan,
         "app_url":      os.getenv("APP_URL", "http://localhost:8000"),
+        "limits":       limits,
+        "free_reservations": FREE_RESERVATIONS,
     })
+
+@app.post("/billing/subscribe", response_class=HTMLResponse, tags=["Pages"])
+async def billing_subscribe(
+    request: Request,
+    plan:    str = Form(...),
+):
+    """HTML form-based checkout — reads httponly cookie, redirects to Paddle."""
+    owner_jwt = get_owner_from_cookie(request)
+    if not owner_jwt:
+        return RedirectResponse("/login", status_code=302)
+
+    if plan not in PLANS:
+        return RedirectResponse("/billing", status_code=302)
+
+    db        = get_platform_db()
+    owner_doc = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
+    rdb       = get_owner_db(owner_jwt["sub"])
+    limits    = _get_effective_limits(rdb, owner_doc)
+
+    try:
+        result = await paddle_create_checkout(owner_doc, plan)
+    except Exception as e:
+        return templates.TemplateResponse("billing.html", {
+            "request":           request,
+            "owner":             owner_doc,
+            "active":            _subscription_active(owner_doc),
+            "plans":             PLANS,
+            "current_plan":      owner_doc.get("plan", "starter"),
+            "app_url":           os.getenv("APP_URL", "http://localhost:8000"),
+            "limits":            limits,
+            "free_reservations": FREE_RESERVATIONS,
+            "error":             "Payment provider error. Please try again.",
+        })
+
+    checkout_url = result.get("data", {}).get("url") or result.get("url", "")
+    if checkout_url:
+        return RedirectResponse(checkout_url, status_code=302)
+
+    return RedirectResponse("/billing", status_code=302)
+
+@app.post("/billing/cancel", response_class=HTMLResponse, tags=["Pages"])
+async def billing_cancel_page(request: Request):
+    """HTML form-based cancel — reads httponly cookie."""
+    owner_jwt = get_owner_from_cookie(request)
+    if not owner_jwt:
+        return RedirectResponse("/login", status_code=302)
+
+    db        = get_platform_db()
+    owner_doc = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
+    sub_id    = owner_doc.get("paddle_subscription_id")
+
+    if sub_id:
+        headers = {"Authorization": f"Bearer {PADDLE_API_KEY}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.delete(
+                f"{PADDLE_BASE_URL}/subscriptions/{sub_id}",
+                headers=headers,
+            )
+        if r.status_code in (200, 204):
+            db["owners"].update_one(
+                {"_id": ObjectId(owner_jwt["sub"])},
+                {"$set": {"subscription_status": "cancelled"}}
+            )
+            logger.info(f"Subscription cancelled: {owner_jwt['sub']}")
+
+    return RedirectResponse("/billing", status_code=302)
 
 @app.get("/billing/success", response_class=HTMLResponse, tags=["Pages"])
 def billing_success(request: Request):
@@ -539,28 +680,30 @@ def dashboard_page(request: Request):
     db    = get_platform_db()
     owner = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
 
-    if not _subscription_active(owner):
-        return RedirectResponse("/billing")
+    # ── Free tier & paid both allowed on dashboard ──
+    # (no redirect to billing)
 
     rdb   = get_owner_db(owner_jwt["sub"])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     plan  = _get_plan(owner)
+    limits = _get_effective_limits(rdb, owner)
 
-    month_start = (datetime.now(timezone.utc) - timedelta(days=30)).replace(tzinfo=timezone.utc)
+    month_start = (datetime.now(timezone.utc) - timedelta(days=30))
     month_count = rdb["reservations"].count_documents({
         "status":     "confirmed",
         "created_at": {"$gte": month_start},
     })
 
     stats = {
-        "total_tables":        rdb["tables"].count_documents({}),
-        "total_guests":        rdb["guests"].count_documents({}),
-        "total_reservations":  rdb["reservations"].count_documents({}),
-        "today_reservations":  rdb["reservations"].count_documents({"date": today, "status": "confirmed"}),
-        "cancelled":           rdb["reservations"].count_documents({"status": "cancelled"}),
-        "month_count":         month_count,
-        "month_limit":         plan["reservations_month"],
-        "month_pct":           round(month_count / plan["reservations_month"] * 100),
+        "total_tables":       rdb["tables"].count_documents({}),
+        "total_guests":       rdb["guests"].count_documents({}),
+        "total_reservations": rdb["reservations"].count_documents({}),
+        "today_reservations": rdb["reservations"].count_documents({"date": today, "status": "confirmed"}),
+        "cancelled":          rdb["reservations"].count_documents({"status": "cancelled"}),
+        "month_count":        limits["reservations_used"],
+        "month_limit":        limits["reservations_limit"],
+        "month_pct":          round(limits["reservations_used"] / limits["reservations_limit"] * 100)
+                              if limits["reservations_limit"] > 0 else 0,
     }
 
     top_guests = list(
@@ -578,12 +721,15 @@ def dashboard_page(request: Request):
         r["id"] = str(r.pop("_id"))
 
     return templates.TemplateResponse("dashboard.html", {
-        "request":    request,
-        "owner":      owner,
-        "stats":      stats,
-        "top_guests": top_guests,
-        "recent_res": recent_res,
-        "plan":       plan,
+        "request":           request,
+        "owner":             owner,
+        "stats":             stats,
+        "top_guests":        top_guests,
+        "recent_res":        recent_res,
+        "plan":              plan,
+        "limits":            limits,
+        "free_reservations": FREE_RESERVATIONS,
+        "is_free_tier":      _is_free_tier(owner),
     })
 
 @app.get("/crm", response_class=HTMLResponse, tags=["Pages"])
@@ -595,8 +741,7 @@ def crm_page(request: Request):
     db    = get_platform_db()
     owner = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
 
-    if not _subscription_active(owner):
-        return RedirectResponse("/billing")
+    # ── Free tier can access CRM too ──
 
     rdb    = get_owner_db(owner_jwt["sub"])
     tables = list(rdb["tables"].find())
@@ -608,14 +753,19 @@ def crm_page(request: Request):
         if "created_at" in doc and isinstance(doc["created_at"], datetime):
             doc["created_at"] = doc["created_at"].strftime("%Y-%m-%d %H:%M")
 
-    plan = _get_plan(owner)
+    plan   = _get_plan(owner)
+    limits = _get_effective_limits(rdb, owner)
+
     return templates.TemplateResponse("crm.html", {
-        "request":      request,
-        "owner":        owner,
-        "tables":       tables,
-        "guests":       guests,
-        "reservations": reservations,
-        "plan":         plan,
+        "request":           request,
+        "owner":             owner,
+        "tables":            tables,
+        "guests":            guests,
+        "reservations":      reservations,
+        "plan":              plan,
+        "limits":            limits,
+        "free_reservations": FREE_RESERVATIONS,
+        "is_free_tier":      _is_free_tier(owner),
     })
 
 @app.get("/reserve/{restaurant_id}", response_class=HTMLResponse, tags=["Pages"])
@@ -627,8 +777,13 @@ def reservation_page(request: Request, restaurant_id: str):
         raise HTTPException(404, "Restaurant not found.")
     if not owner:
         raise HTTPException(404, "Restaurant not found.")
-    if not _subscription_active(owner):
-        raise HTTPException(503, "Reservations are currently unavailable.")
+
+    # ── Free tier restaurants can still accept guest bookings ──
+    rdb    = get_owner_db(restaurant_id)
+    limits = _get_effective_limits(rdb, owner)
+    if limits["reservations_left"] == 0 and not _subscription_active(owner):
+        raise HTTPException(503, "Reservations are temporarily unavailable. Please contact the restaurant.")
+
     return templates.TemplateResponse("reservation.html", {
         "request":         request,
         "restaurant_name": owner["restaurant_name"],
@@ -641,11 +796,6 @@ def reservation_page(request: Request, restaurant_id: str):
 
 @app.websocket("/ws/dashboard/{restaurant_id}")
 async def ws_dashboard(websocket: WebSocket, restaurant_id: str):
-    """
-    Real-time dashboard updates.
-    Owner dashboard connects here; AI agent broadcasts new bookings instantly.
-    """
-    # Validate restaurant exists
     db    = get_platform_db()
     owner = db["owners"].find_one({"_id": ObjectId(restaurant_id)})
     if not owner:
@@ -655,7 +805,6 @@ async def ws_dashboard(websocket: WebSocket, restaurant_id: str):
     await ws_manager.connect(websocket, restaurant_id)
     try:
         while True:
-            # Keep connection alive with ping every 30s
             await asyncio.sleep(30)
             await websocket.send_json({"type": "ping"})
     except WebSocketDisconnect:
@@ -679,16 +828,17 @@ def api_signup(body: SignupRequest, request: Request):
 
     restaurant_id = str(ObjectId())
     db["owners"].insert_one({
-        "_id":                   ObjectId(restaurant_id),
-        "restaurant_name":       body.restaurant_name,
-        "owner_name":            body.owner_name,
-        "email":                 body.email.lower(),
-        "password_hash":         hash_password(body.password),
-        "created_at":            datetime.now(timezone.utc),
-        "subscription_status":   "inactive",
-        "plan":                  "starter",
-        "paddle_customer_id":    None,
+        "_id":                    ObjectId(restaurant_id),
+        "restaurant_name":        body.restaurant_name,
+        "owner_name":             body.owner_name,
+        "email":                  body.email.lower(),
+        "password_hash":          hash_password(body.password),
+        "created_at":             datetime.now(timezone.utc),
+        "subscription_status":    "inactive",
+        "plan":                   "starter",
+        "paddle_customer_id":     None,
         "paddle_subscription_id": None,
+        "free_tier":              True,
     })
     token, expires_at = create_jwt(restaurant_id, body.email.lower())
     return TokenResponse(access_token=token, expires_at=expires_at)
@@ -713,7 +863,6 @@ def api_login(body: LoginRequest, request: Request):
 
 @app.post("/api/billing/checkout", tags=["Billing"])
 async def create_checkout(body: SubscribeRequest, owner=Depends(get_current_owner)):
-    """Create Paddle checkout session → returns checkout URL for frontend redirect."""
     if body.plan not in PLANS:
         raise HTTPException(400, f"Invalid plan. Choose: {list(PLANS.keys())}")
 
@@ -754,15 +903,10 @@ async def cancel_subscription(owner=Depends(get_current_owner)):
 
 @app.get("/api/billing/plans", tags=["Billing"])
 def get_plans():
-    """Public endpoint — returns all plan details."""
     return {k: {**v, "paddle_price_id": None} for k, v in PLANS.items()}
 
 @app.post("/api/billing/webhook", tags=["Billing"])
 async def paddle_webhook(request: Request):
-    """
-    Paddle calls this on payment success / failure / renewal.
-    Automatically keeps subscription_status + plan in sync.
-    """
     payload   = await request.body()
     signature = request.headers.get("Paddle-Signature", "")
 
@@ -779,11 +923,11 @@ async def paddle_webhook(request: Request):
     db         = get_platform_db()
 
     if event_type in ("subscription.activated", "subscription.updated"):
-        sub_id      = data.get("id")
-        custom_data = data.get("custom_data", {})
+        sub_id        = data.get("id")
+        custom_data   = data.get("custom_data", {})
         restaurant_id = custom_data.get("restaurant_id")
-        plan_key    = custom_data.get("plan", "starter")
-        customer_id = data.get("customer_id")
+        plan_key      = custom_data.get("plan", "starter")
+        customer_id   = data.get("customer_id")
 
         if restaurant_id:
             db["owners"].update_one(
@@ -793,6 +937,7 @@ async def paddle_webhook(request: Request):
                     "plan":                   plan_key,
                     "paddle_subscription_id": sub_id,
                     "paddle_customer_id":     customer_id,
+                    "free_tier":              False,
                 }}
             )
             logger.info(f"Webhook: subscription activated {restaurant_id} plan={plan_key}")
@@ -806,14 +951,17 @@ async def paddle_webhook(request: Request):
         logger.info(f"Webhook: subscription cancelled {sub_id}")
 
     elif event_type == "transaction.completed":
-        customer_id = data.get("customer_id")
-        custom_data = data.get("custom_data", {})
+        custom_data   = data.get("custom_data", {})
         restaurant_id = custom_data.get("restaurant_id")
-        plan_key = custom_data.get("plan", "starter")
+        plan_key      = custom_data.get("plan", "starter")
         if restaurant_id:
             db["owners"].update_one(
                 {"_id": ObjectId(restaurant_id)},
-                {"$set": {"subscription_status": "active", "plan": plan_key}}
+                {"$set": {
+                    "subscription_status": "active",
+                    "plan":                plan_key,
+                    "free_tier":           False,
+                }}
             )
 
     elif event_type == "transaction.payment_failed":
@@ -832,11 +980,15 @@ async def paddle_webhook(request: Request):
 # ============================================================
 
 def _sub_guard(owner):
+    """
+    For API routes — allows free tier AND paid tier.
+    Blocks only if neither active subscription nor free tier remaining.
+    """
     db        = get_platform_db()
     owner_doc = db["owners"].find_one({"_id": ObjectId(owner["sub"])})
-    if not _subscription_active(owner_doc):
-        raise HTTPException(402, "Active subscription required.")
-    return get_owner_db(owner["sub"]), owner_doc
+    rdb       = get_owner_db(owner["sub"])
+    # Always allow CRM access — limits enforced at reservation creation
+    return rdb, owner_doc
 
 # --- Tables ---
 
@@ -844,6 +996,8 @@ def _sub_guard(owner):
 def api_create_table(body: TableIn, owner=Depends(get_current_owner)):
     db, owner_doc = _sub_guard(owner)
     if not _check_table_limit(db, owner_doc):
+        if _is_free_tier(owner_doc):
+            raise HTTPException(403, f"Free tier allows up to {FREE_TABLES_MAX} tables. Upgrade to add more.")
         plan = _get_plan(owner_doc)
         raise HTTPException(403, f"Table limit reached ({plan['tables_max']} max on your plan).")
     result = db["tables"].insert_one(body.model_dump())
@@ -911,6 +1065,8 @@ def _slot_available(db, table_id, date, time_slot, exclude_id=None):
 def api_create_reservation(body: ReservationIn, owner=Depends(get_current_owner)):
     db, owner_doc = _sub_guard(owner)
     if not _check_reservation_limit(db, owner_doc):
+        if _is_free_tier(owner_doc):
+            raise HTTPException(403, f"Free tier limit of {FREE_RESERVATIONS} reservations reached. Upgrade to continue.")
         plan = _get_plan(owner_doc)
         raise HTTPException(403, f"Monthly reservation limit reached ({plan['reservations_month']} on your plan). Upgrade to continue.")
     if not _slot_available(db, body.table_id, body.date, body.time_slot):
@@ -1090,12 +1246,14 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
     owner = db["owners"].find_one({"_id": ObjectId(restaurant_id)})
     if not owner:
         raise HTTPException(404, "Restaurant not found.")
-    if not _subscription_active(owner):
-        raise HTTPException(402, "Reservations are currently unavailable.")
 
-    rdb         = get_owner_db(restaurant_id)
-    owner_doc   = owner
+    rdb       = get_owner_db(restaurant_id)
+    owner_doc = owner
+
+    # ── Check reservation limit (free tier OR paid) ──
     if not _check_reservation_limit(rdb, owner_doc):
+        if _is_free_tier(owner_doc):
+            raise HTTPException(403, f"Free reservation limit of {FREE_RESERVATIONS} reached. The restaurant needs to upgrade.")
         plan = _get_plan(owner_doc)
         raise HTTPException(403, f"Monthly reservation limit of {plan['reservations_month']} reached.")
 
@@ -1171,7 +1329,7 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
         logger.error(f"Claude API error: {exc}")
         raise HTTPException(502, f"AI service error: {exc}")
 
-    # ── Broadcast new booking to all dashboard WebSocket clients ──
+    # ── Broadcast new booking to dashboard WebSocket clients ──
     if booking_made and booking_data:
         await ws_manager.broadcast(restaurant_id, {
             "type":           "new_booking",
@@ -1203,8 +1361,9 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
 @app.get("/api/admin/dashboard", tags=["Admin API"])
 def api_dashboard(owner=Depends(get_current_owner)):
     db, owner_doc = _sub_guard(owner)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    plan  = _get_plan(owner_doc)
+    today  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    plan   = _get_plan(owner_doc)
+    limits = _get_effective_limits(db, owner_doc)
 
     top_guests = list(
         db["guests"].find({}, {"name": 1, "visit_count": 1})
@@ -1212,23 +1371,19 @@ def api_dashboard(owner=Depends(get_current_owner)):
     )
     for g in top_guests: g["id"] = str(g.pop("_id"))
 
-    month_start = (datetime.now(timezone.utc) - timedelta(days=30)).replace(tzinfo=timezone.utc)
-    month_count = db["reservations"].count_documents({
-        "status":     "confirmed",
-        "created_at": {"$gte": month_start},
-    })
-
     return {
-        "restaurant_id":          owner["sub"],
-        "plan":                   plan["name"],
-        "reservations_month":     {"used": month_count, "limit": plan["reservations_month"]},
-        "as_of":                  datetime.now(timezone.utc).isoformat(),
-        "total_tables":           db["tables"].count_documents({}),
-        "total_guests":           db["guests"].count_documents({}),
-        "total_reservations":     db["reservations"].count_documents({}),
-        "today_reservations":     db["reservations"].count_documents({"date": today, "status": "confirmed"}),
-        "cancelled":              db["reservations"].count_documents({"status": "cancelled"}),
-        "top_guests_by_visits":   top_guests,
+        "restaurant_id":        owner["sub"],
+        "plan":                 plan["name"],
+        "tier":                 limits["tier"],
+        "reservations_month":   {"used": limits["reservations_used"], "limit": limits["reservations_limit"]},
+        "reservations_left":    limits["reservations_left"],
+        "as_of":                datetime.now(timezone.utc).isoformat(),
+        "total_tables":         db["tables"].count_documents({}),
+        "total_guests":         db["guests"].count_documents({}),
+        "total_reservations":   db["reservations"].count_documents({}),
+        "today_reservations":   db["reservations"].count_documents({"date": today, "status": "confirmed"}),
+        "cancelled":            db["reservations"].count_documents({"status": "cancelled"}),
+        "top_guests_by_visits": top_guests,
     }
 
 # ============================================================
@@ -1240,7 +1395,7 @@ def health():
     return {
         "status":    "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version":   "3.0.0",
+        "version":   "3.1.0",
     }
 
 # ============================================================
