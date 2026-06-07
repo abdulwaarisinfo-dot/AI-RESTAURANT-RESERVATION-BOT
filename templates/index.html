@@ -4,7 +4,7 @@
   <title>Tablely — AI Restaurant Reservations</title>
   {% include "_base_styles.html" %}
   <style>
-    /* ── HERO ── */
+    /* ── HERO ─────────────────────────────────────────────────────────── */
     .hero {
       min-height: 100vh;
       display: flex; align-items: center;
@@ -26,10 +26,9 @@
     .hero-inner {
       position: relative; z-index: 1;
       width: 100%; max-width: 1200px;
-      margin: 0 auto; padding: 0 24px;
+      margin: 0 auto; padding: 80px 24px 40px;
       display: grid; grid-template-columns: 1fr 1fr;
       align-items: center; gap: 60px;
-      padding-top: 80px;
     }
     .hero-eyebrow {
       display: inline-flex; align-items: center; gap: 8px;
@@ -41,8 +40,7 @@
     }
     .hero-title {
       font-size: clamp(2.4rem, 4vw, 3.8rem);
-      font-weight: 300; color: var(--text);
-      margin-bottom: 20px;
+      font-weight: 300; color: var(--text); margin-bottom: 20px;
     }
     .hero-title em { font-style: italic; color: var(--gold); }
     .hero-desc {
@@ -52,14 +50,26 @@
     .hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
     .hero-note { font-size: .78rem; color: var(--text-3); margin-top: 14px; }
 
-    /* APP MOCKUP */
+    /* free trial callout */
+    .free-trial-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(91,184,145,.1); border: 1px solid rgba(91,184,145,.25);
+      border-radius: 100px; padding: 4px 12px; font-size: .75rem;
+      color: var(--green); margin-bottom: 16px;
+      letter-spacing: .05em;
+    }
+    .free-trial-badge::before { content: '✓'; }
+
+    /* ── APP MOCKUP ────────────────────────────────────────────────────── */
     .hero-visual {
-      position: relative; display: flex; justify-content: center; align-items: center;
+      position: relative; display: flex;
+      justify-content: center; align-items: center;
     }
     .mockup-phone {
       width: 260px; background: var(--bg-3);
       border: 1px solid var(--border-hi); border-radius: 24px;
-      overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,.6), var(--shadow-gold);
+      overflow: hidden;
+      box-shadow: 0 32px 80px rgba(0,0,0,.6), var(--shadow-gold);
       position: relative; z-index: 2;
     }
     .mockup-phone-bar {
@@ -68,7 +78,7 @@
       padding: 0 16px; border-bottom: 1px solid var(--border);
     }
     .mockup-phone-bar span { font-size: .7rem; color: var(--text-3); }
-    .mockup-phone-bar .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+    .mockup-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
     .mockup-body { padding: 16px; }
     .mockup-greeting { font-size: .7rem; color: var(--text-3); margin-bottom: 4px; }
     .mockup-rest-name {
@@ -77,47 +87,51 @@
     }
     .mockup-chat { display: flex; flex-direction: column; gap: 8px; }
     .mockup-bubble {
-      padding: 9px 12px; border-radius: 10px; font-size: .72rem;
-      line-height: 1.5; max-width: 90%;
+      padding: 9px 12px; border-radius: 10px;
+      font-size: .72rem; line-height: 1.5; max-width: 90%;
     }
-    .mockup-bubble.bot {
-      background: var(--bg-4); color: var(--text-2); align-self: flex-start;
-    }
-    .mockup-bubble.user {
-      background: var(--gold); color: #0d0d0d; align-self: flex-end;
-    }
+    .mockup-bubble.bot  { background: var(--bg-4); color: var(--text-2); align-self: flex-start; }
+    .mockup-bubble.user { background: var(--gold); color: #0d0d0d; align-self: flex-end; }
     .mockup-confirm {
       margin-top: 14px; padding: 10px 12px;
       background: rgba(91,184,145,.1); border: 1px solid rgba(91,184,145,.25);
       border-radius: 8px;
     }
-    .mockup-confirm-label { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--green); margin-bottom: 4px; }
+    .mockup-confirm-label {
+      font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--green); margin-bottom: 4px;
+    }
     .mockup-confirm-val { font-size: .78rem; color: var(--text); }
 
-    .mockup-card {
-      width: 200px; background: var(--bg-2);
+    .mockup-float {
+      position: absolute; background: var(--bg-2);
       border: 1px solid var(--border); border-radius: 14px;
-      padding: 14px; box-shadow: var(--shadow);
-      position: absolute;
+      padding: 14px; box-shadow: var(--shadow); width: 190px; z-index: 3;
     }
-    .mockup-card-1 { top: 10%; right: -30px; z-index: 3; }
-    .mockup-card-2 { bottom: 10%; left: -30px; z-index: 3; }
-    .mockup-card-label { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
-    .mockup-card-val { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--text); }
-    .mockup-card-sub { font-size: .7rem; color: var(--green); margin-top: 2px; }
+    .mockup-float-1 { top: 8%;  right: -20px; }
+    .mockup-float-2 { bottom: 8%; left: -20px; }
+    .mockup-float-label {
+      font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-3); margin-bottom: 6px;
+    }
+    .mockup-float-val {
+      font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--text);
+    }
+    .mockup-float-sub { font-size: .7rem; color: var(--green); margin-top: 2px; }
+    .mockup-float-sub.muted { color: var(--text-3); }
 
-    /* ── FEATURES ── */
-    .features {
-      padding: 100px 0 80px;
-      background: var(--bg);
-    }
+    /* ── FEATURES ──────────────────────────────────────────────────────── */
+    .features { padding: 100px 0 80px; background: var(--bg); }
     .section-header { text-align: center; margin-bottom: 56px; }
     .section-eyebrow {
       font-size: .72rem; letter-spacing: .15em; text-transform: uppercase;
       color: var(--gold); margin-bottom: 14px;
     }
     .section-title { font-size: clamp(1.8rem, 3vw, 2.8rem); color: var(--text); }
-    .section-desc { font-size: .95rem; color: var(--text-2); margin-top: 12px; max-width: 480px; margin-left: auto; margin-right: auto; }
+    .section-desc {
+      font-size: .95rem; color: var(--text-2); margin-top: 12px;
+      max-width: 480px; margin-left: auto; margin-right: auto;
+    }
 
     .feature-card {
       background: var(--bg-2); border: 1px solid var(--border);
@@ -137,19 +151,29 @@
     }
     .feature-desc { font-size: .88rem; color: var(--text-2); line-height: 1.65; }
 
-    /* ── PRICING ── */
+    /* ── PRICING ───────────────────────────────────────────────────────── */
     .pricing {
       padding: 80px 0 100px;
       background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
     }
     .pricing-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 0 24px;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 20px; max-width: 960px; margin: 0 auto; padding: 0 24px;
     }
+
+    /* Free tier note above pricing */
+    .pricing-free-note {
+      text-align: center; margin-bottom: 32px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-size: .84rem; color: var(--text-2);
+    }
+    .pricing-free-note .pf-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(91,184,145,.1); border: 1px solid rgba(91,184,145,.25);
+      border-radius: 100px; padding: 4px 12px; font-size: .75rem;
+      color: var(--green);
+    }
+
     .plan-card {
       background: var(--bg-2); border: 1px solid var(--border);
       border-radius: var(--radius-lg); padding: 32px;
@@ -171,26 +195,30 @@
       font-size: .75rem; letter-spacing: .12em; text-transform: uppercase;
       color: var(--text-3); margin-bottom: 12px;
     }
-    .plan-price {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 3rem; color: var(--text); line-height: 1;
-    }
-    .plan-price sup { font-size: 1.2rem; vertical-align: top; margin-top: .5rem; }
-    .plan-price-period { font-size: .8rem; color: var(--text-3); margin-left: 2px; }
     .plan-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
     .plan-features { display: flex; flex-direction: column; gap: 10px; flex: 1; margin-bottom: 24px; }
     .plan-feature {
-      display: flex; align-items: center; gap: 9px;
-      font-size: .85rem; color: var(--text-2);
+      display: flex; align-items: flex-start; gap: 9px;
+      font-size: .85rem; color: var(--text-2); line-height: 1.4;
     }
-    .plan-feature::before { content: '◆'; font-size: .45rem; color: var(--gold); flex-shrink: 0; }
+    .plan-feature::before { content: '◆'; font-size: .45rem; color: var(--gold); flex-shrink: 0; margin-top: 5px; }
 
-    /* ── FOOTER ── */
-    .footer {
-      border-top: 1px solid var(--border);
-      padding: 28px 0;
-      text-align: center;
+    /* ── FREE TIER CTA SECTION ─────────────────────────────────────────── */
+    .free-cta {
+      background: rgba(91,184,145,.05); border: 1px solid rgba(91,184,145,.2);
+      border-radius: var(--radius-lg); padding: 32px;
+      text-align: center; max-width: 540px; margin: 48px auto 0;
     }
+    .free-cta h3 { font-size: 1.5rem; margin-bottom: 10px; color: var(--text); }
+    .free-cta p  { font-size: .9rem; color: var(--text-2); margin-bottom: 20px; line-height: 1.6; }
+    .free-cta .free-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3rem; color: var(--green); line-height: 1; margin-bottom: 4px;
+    }
+    .free-cta .free-label { font-size: .8rem; color: var(--text-3); margin-bottom: 24px; }
+
+    /* ── FOOTER ────────────────────────────────────────────────────────── */
+    .footer { border-top: 1px solid var(--border); padding: 28px 0; text-align: center; }
     .footer p { font-size: .8rem; color: var(--text-3); }
     .footer a { color: var(--text-3); }
     .footer a:hover { color: var(--gold); }
@@ -205,15 +233,15 @@
 <body>
   <!-- NAV -->
   <nav class="nav">
-    <div class="nav-brand">
+    <a class="nav-brand" href="/">
       <div class="nav-brand-dot"></div>
       Tablely
-    </div>
+    </a>
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#pricing">Pricing</a>
       <a href="/login" class="btn btn-ghost btn-sm">Log In</a>
-      <a href="/signup" class="btn btn-primary btn-sm">Get Started</a>
+      <a href="/signup" class="btn btn-primary btn-sm">Get Started Free</a>
     </div>
   </nav>
 
@@ -223,33 +251,37 @@
     <div class="hero-grid"></div>
     <div class="hero-inner">
       <div>
+        <div class="free-trial-badge">10 free reservations — no card required</div>
         <div class="hero-eyebrow">AI-Powered Reservations</div>
         <h1 class="hero-title">
           Book Your Table<br>
           in <em>Seconds</em>
         </h1>
         <p class="hero-desc">
-          Discover, reserve and enjoy the best dining experience — with a conversational AI agent that handles every booking for your restaurant.
+          A conversational AI agent handles every booking for your restaurant — 24/7,
+          with a live CRM, real-time dashboard, and smart slot management.
         </p>
         <div class="hero-actions">
-          <a href="/signup" class="btn btn-primary btn-lg">Start Free Trial</a>
+          <a href="/signup" class="btn btn-primary btn-lg">Start Free — 10 Reservations</a>
           <a href="#features" class="btn btn-outline btn-lg">See Features</a>
         </div>
-        <p class="hero-note">No credit card required &nbsp;·&nbsp; 14-day free trial</p>
+        <p class="hero-note">No credit card &nbsp;·&nbsp; Upgrade anytime &nbsp;·&nbsp; Works from day one</p>
       </div>
 
-      <!-- APP MOCKUP -->
+      <!-- App mockup -->
       <div class="hero-visual">
-        <div class="mockup-card mockup-card-1 card">
-          <div class="mockup-card-label">Today's Bookings</div>
-          <div class="mockup-card-val">24</div>
-          <div class="mockup-card-sub">↑ 3 in the last hour</div>
+        <div class="mockup-float mockup-float-1 card">
+          <div class="mockup-float-label">Today's Bookings</div>
+          <div class="mockup-float-val">24</div>
+          <div class="mockup-float-sub">↑ 3 in the last hour</div>
         </div>
         <div class="mockup-phone">
           <div class="mockup-phone-bar">
             <span>10:15</span>
-            <div class="nav-brand" style="font-size:.8rem;gap:5px"><div class="nav-brand-dot" style="width:5px;height:5px"></div>Tablely</div>
-            <div class="dot"></div>
+            <a class="nav-brand" style="font-size:.8rem;gap:5px;" href="/">
+              <div class="nav-brand-dot" style="width:5px;height:5px;"></div>Tablely
+            </a>
+            <div class="mockup-dot"></div>
           </div>
           <div class="mockup-body">
             <div class="mockup-greeting">Welcome to</div>
@@ -266,10 +298,10 @@
             </div>
           </div>
         </div>
-        <div class="mockup-card mockup-card-2 card">
-          <div class="mockup-card-label">Monthly Usage</div>
-          <div class="mockup-card-val">847</div>
-          <div class="mockup-card-sub" style="color:var(--text-3)">of 1,200 reservations</div>
+        <div class="mockup-float mockup-float-2 card">
+          <div class="mockup-float-label">Monthly Usage</div>
+          <div class="mockup-float-val">847</div>
+          <div class="mockup-float-sub muted">of 1,200 reservations</div>
         </div>
       </div>
     </div>
@@ -280,39 +312,39 @@
     <div class="container">
       <div class="section-header">
         <div class="section-eyebrow">Everything You Need</div>
-        <h2 class="section-title">You'll Love Our Platform</h2>
-        <p class="section-desc">Everything you need for a seamless dining experience — managed from one intelligent dashboard.</p>
+        <h2 class="section-title">Built for Modern Restaurants</h2>
+        <p class="section-desc">Everything you need for seamless reservations — managed from one intelligent dashboard.</p>
       </div>
       <div class="grid-3" style="max-width:900px;margin:0 auto;">
         <div class="feature-card">
           <div class="feature-icon">⌕</div>
-          <div class="feature-title">Smart Search</div>
-          <p class="feature-desc">Quickly find available tables with real-time slot visibility and intelligent conflict detection.</p>
+          <div class="feature-title">Smart Slot Management</div>
+          <p class="feature-desc">Define per-table time slots for any date. The AI bot only offers guests slots you've opened — no surprises.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
-          <div class="feature-title">Instant Booking</div>
-          <p class="feature-desc">Secure your table in just a few taps, with real-time availability updated across all channels.</p>
+          <div class="feature-title">Instant AI Booking</div>
+          <p class="feature-desc">Claude-powered agent handles natural conversation — "next Thursday", "party of 4", all resolved intelligently.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">◈</div>
-          <div class="feature-title">Manage Reservations</div>
-          <p class="feature-desc">Easily view, modify or cancel upcoming reservations from your live CRM dashboard.</p>
+          <div class="feature-title">Live Dashboard</div>
+          <p class="feature-desc">WebSocket real-time updates. New bookings appear the instant they're made, with zero page refresh.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">◉</div>
-          <div class="feature-title">AI Sales Agent</div>
-          <p class="feature-desc">Claude-powered conversational agent handles guest interactions and books tables autonomously.</p>
+          <div class="feature-title">Guest CRM</div>
+          <p class="feature-desc">Track visit history, preferences, and contact details. Guests are upserted automatically on every booking.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⬡</div>
-          <div class="feature-title">Live Dashboard</div>
-          <p class="feature-desc">WebSocket real-time updates — see new bookings appear on your dashboard the instant they're made.</p>
+          <div class="feature-title">Plan Limits Enforced</div>
+          <p class="feature-desc">Reservation counts are enforced server-side. Free tier gets 10 reservations; paid plans scale up to 2,000/month.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">◎</div>
-          <div class="feature-title">Guest CRM</div>
-          <p class="feature-desc">Track visit history, preferences, and contact details for every guest automatically.</p>
+          <div class="feature-title">Secure &amp; Multi-Tenant</div>
+          <p class="feature-desc">Each restaurant gets an isolated database. JWT auth, rate limiting, and security headers out of the box.</p>
         </div>
       </div>
     </div>
@@ -323,9 +355,17 @@
     <div class="section-header">
       <div class="section-eyebrow">Simple Pricing</div>
       <h2 class="section-title">Choose Your Plan</h2>
-      <p class="section-desc">All plans include the full AI booking agent and CRM suite.</p>
+      <p class="section-desc">All plans include the full AI booking agent and CRM suite. No hidden fees.</p>
     </div>
+
+    <!-- Free tier note -->
+    <div class="pricing-free-note">
+      <span class="pf-badge">✓ Free to start</span>
+      <span>Get <strong style="color:var(--text);">10 free reservations</strong> with every new account — no card required.</span>
+    </div>
+
     <div class="pricing-grid">
+      {# plans dict from main.py: starter / professional / enterprise #}
       {% for key, plan in plans.items() %}
       <div class="plan-card {% if key == 'professional' %}featured{% endif %}">
         <div class="plan-name">{{ plan.name }}</div>
@@ -338,18 +378,33 @@
           <li class="plan-feature">{{ f }}</li>
           {% endfor %}
         </ul>
-        <a href="/signup?plan={{ key }}" class="btn {% if key == 'professional' %}btn-primary{% else %}btn-outline{% endif %} btn-lg" style="width:100%">
+        <a href="/signup?plan={{ key }}"
+           class="btn {% if key == 'professional' %}btn-primary{% else %}btn-outline{% endif %} btn-lg"
+           style="width:100%;">
           Get Started
         </a>
       </div>
       {% endfor %}
+    </div>
+
+    <!-- Free tier CTA -->
+    <div class="free-cta">
+      <div class="free-num">10</div>
+      <div class="free-label">free reservations · no card required</div>
+      <h3>Try Before You Commit</h3>
+      <p>
+        Sign up instantly and get 10 real reservations through the AI agent —
+        fully functional CRM, time slots, and dashboard included.
+        Upgrade only when you're ready.
+      </p>
+      <a href="/signup" class="btn btn-primary btn-lg">Create Free Account</a>
     </div>
   </section>
 
   <!-- FOOTER -->
   <footer class="footer">
     <div class="container">
-      <p>© 2025 Tablely · <a href="/login">Log In</a> · <a href="/signup">Sign Up</a></p>
+      <p>© 2025 Tablely &nbsp;·&nbsp; <a href="/login">Log In</a> &nbsp;·&nbsp; <a href="/signup">Sign Up</a></p>
     </div>
   </footer>
 </body>
