@@ -91,3 +91,4 @@ websocket==0.2.1
 websockets==16.0
 zope.event==6.1
 zope.interface==8.2
+anthropic==0.40.0
