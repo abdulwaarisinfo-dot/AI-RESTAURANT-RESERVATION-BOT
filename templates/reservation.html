@@ -42,7 +42,7 @@
       font-size: 1rem; color: var(--gold); flex-shrink: 0;
     }
     .chat-agent-name { font-size: .9rem; color: var(--text); font-weight: 400; }
-    .chat-agent-sub { font-size: .75rem; color: var(--text-3); }
+    .chat-agent-sub  { font-size: .75rem; color: var(--text-3); }
     .chat-status {
       margin-left: auto; display: flex; align-items: center; gap: 5px;
       font-size: .72rem; color: var(--green);
@@ -51,7 +51,7 @@
       width: 5px; height: 5px; border-radius: 50%;
       background: var(--green); animation: pulse 2s infinite;
     }
-    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.25} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
 
     /* MESSAGES */
     .chat-messages {
@@ -60,7 +60,7 @@
       scroll-behavior: smooth;
     }
     .message { display: flex; flex-direction: column; max-width: 80%; }
-    .message.bot { align-self: flex-start; }
+    .message.bot  { align-self: flex-start; }
     .message.user { align-self: flex-end; }
     .message-bubble {
       padding: 10px 14px; border-radius: 12px;
@@ -93,7 +93,8 @@
     /* CONFIRMATION CARD */
     .booking-confirmed {
       background: rgba(91,184,145,.08); border: 1px solid rgba(91,184,145,.3);
-      border-radius: 10px; padding: 14px; margin-top: 6px; max-width: 80%;
+      border-radius: 10px; padding: 14px; margin-top: 4px;
+      align-self: flex-start; max-width: 80%;
     }
     .booking-confirmed-label {
       font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
@@ -104,6 +105,14 @@
       font-size: 1.1rem; color: var(--text); margin-bottom: 2px;
     }
     .booking-confirmed-detail { font-size: .8rem; color: var(--text-2); }
+
+    /* ERROR CARD */
+    .booking-error {
+      background: rgba(220,80,80,.07); border: 1px solid rgba(220,80,80,.28);
+      border-radius: 10px; padding: 12px 14px; margin-top: 4px;
+      align-self: flex-start; max-width: 80%;
+      font-size: .83rem; color: var(--red, #e55);
+    }
 
     /* INPUT */
     .chat-input-area {
@@ -122,6 +131,7 @@
     }
     .chat-input:focus { border-color: var(--gold-dim); }
     .chat-input::placeholder { color: var(--text-3); }
+    .chat-input:disabled { opacity: .5; cursor: not-allowed; }
     .chat-send {
       width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
       background: var(--gold); border: none; cursor: pointer;
@@ -129,7 +139,7 @@
       display: flex; align-items: center; justify-content: center;
       transition: all var(--transition);
     }
-    .chat-send:hover { background: #d4b47a; }
+    .chat-send:hover  { background: #d4b47a; }
     .chat-send:disabled { opacity: .45; cursor: not-allowed; }
 
     /* QUICK REPLIES */
@@ -166,6 +176,7 @@
   <div class="reserve-page">
     <div class="reserve-header">
       <div style="font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">◆ AI Booking Agent</div>
+      {# restaurant_name is safe to render in HTML — Jinja2 auto-escapes by default #}
       <h1 class="reserve-rest-name">{{ restaurant_name }}</h1>
       <p class="reserve-desc">Chat with our AI agent to reserve your table in seconds.</p>
     </div>
@@ -175,6 +186,7 @@
       <div class="chat-header">
         <div class="chat-avatar">◆</div>
         <div>
+          {# restaurant_name in HTML is fine; in JS below we use | tojson to avoid quote injection #}
           <div class="chat-agent-name">{{ restaurant_name }}</div>
           <div class="chat-agent-sub">AI Reservation Agent</div>
         </div>
@@ -185,11 +197,9 @@
       </div>
 
       <!-- Messages -->
-      <div class="chat-messages" id="chat-messages">
-        <!-- Initial bot message injected by JS -->
-      </div>
+      <div class="chat-messages" id="chat-messages"></div>
 
-      <!-- Quick replies (hidden after first message) -->
+      <!-- Quick replies — hidden after first user message -->
       <div class="quick-replies" id="quick-replies">
         <button class="quick-reply" onclick="sendQuick('Table for 2')">Table for 2</button>
         <button class="quick-reply" onclick="sendQuick('Table for 4')">Table for 4</button>
@@ -214,34 +224,56 @@
   </div>
 
   <script>
-    const restaurantId = '{{ restaurant_id }}';
-    let history = [];
-    let sessionId = 'sess_' + Math.random().toString(36).slice(2);
-    let sending = false;
-    let bookingMade = false;
+    // ── Jinja2 variables → JS ────────────────────────────────────────────────
+    // restaurant_id is a hex ObjectId string — alphanumeric only, safe without escaping.
+    // restaurant_name MAY contain quotes, backslashes, or unicode — MUST use | tojson
+    // so Jinja2 produces a properly escaped JS string literal including the quotes.
+    // e.g. restaurant_name = "Ali's Grill"  →  | tojson  →  "Ali\u0027s Grill"
+    const restaurantId   = {{ restaurant_id   | tojson }};
+    const restaurantName = {{ restaurant_name | tojson }};
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    // history: mirrors List[ChatMessage] — array of {role, content} objects.
+    // Sent back to /api/ai/chat on every turn so the server can reconstruct
+    // the full conversation (Claude has no memory between calls).
+    let history     = [];
+    let sessionId   = 'sess_' + Math.random().toString(36).slice(2);
+    let sending     = false;   // prevents concurrent requests
+    let bookingMade = false;   // locks input after confirmed booking
 
     const messagesEl = document.getElementById('chat-messages');
     const inputEl    = document.getElementById('chat-input');
     const sendBtn    = document.getElementById('send-btn');
     const quickEl    = document.getElementById('quick-replies');
 
-    function now() {
+    function nowStr() {
       return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
+    // ── Message rendering ─────────────────────────────────────────────────────
     function addMessage(role, text, extraHtml) {
       const div = document.createElement('div');
       div.className = `message ${role}`;
+      // Escape the text so it's safe to inject as HTML,
+      // then convert newlines to <br> for multi-line bot replies.
+      const safe = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
       div.innerHTML = `
-        <div class="message-bubble">${text.replace(/\n/g, '<br>')}</div>
+        <div class="message-bubble">${safe}</div>
         ${extraHtml || ''}
-        <div class="message-time">${now()}</div>
+        <div class="message-time">${nowStr()}</div>
       `;
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     function addTyping() {
+      // Only one typing indicator at a time (sending flag prevents re-entry,
+      // but guard by id just in case)
+      if (document.getElementById('typing-indicator')) return;
       const div = document.createElement('div');
       div.className = 'message bot';
       div.id = 'typing-indicator';
@@ -253,64 +285,115 @@
       document.getElementById('typing-indicator')?.remove();
     }
 
-    function addConfirmCard(resId) {
+    // Confirmation card — shown after a successful booking.
+    // reservation_id from the API is the full 24-char ObjectId string.
+    // We slice to 8 and uppercase to match the format shown on the dashboard
+    // and in the WS broadcast (res_id[:8].upper() in Python).
+    function addConfirmCard(reservationId) {
+      const ref  = reservationId.slice(0, 8).toUpperCase();
       const card = document.createElement('div');
       card.className = 'booking-confirmed';
       card.innerHTML = `
         <div class="booking-confirmed-label">✓ Booking Confirmed</div>
-        <div class="booking-confirmed-ref">Ref: ${resId}</div>
+        <div class="booking-confirmed-ref">Ref: ${ref}</div>
         <div class="booking-confirmed-detail">Your table is reserved. See you soon!</div>
       `;
       messagesEl.appendChild(card);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    // Error card — shown for 403 (limit hit) and other non-recoverable errors.
+    function addErrorCard(message) {
+      const card = document.createElement('div');
+      card.className = 'booking-error';
+      card.textContent = message;
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // ── Send logic ────────────────────────────────────────────────────────────
+    // POST /api/ai/chat?restaurant_id={restaurantId}
+    // Body: { session_id, message, history: [{role, content}] }
+    // Response: ChatResponse { reply, history, booking_made, reservation_id }
+    //
+    // No auth header needed — this is the public guest-facing endpoint.
+    // restaurant_id is passed as a query param, not from the JWT cookie.
     async function sendMessage(text) {
-      const msg = (text ?? inputEl.value).trim();
+      const msg = (text !== undefined ? text : inputEl.value).trim();
       if (!msg || sending || bookingMade) return;
 
       sending = true;
       sendBtn.disabled = true;
       inputEl.value = '';
       inputEl.style.height = 'auto';
-      quickEl.style.display = 'none';
+      quickEl.style.display = 'none';   // hide quick replies after first message
 
       addMessage('user', msg);
-
       addTyping();
 
       try {
         const res = await fetch(`/api/ai/chat?restaurant_id=${restaurantId}`, {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, message: msg, history }),
+          body:    JSON.stringify({ session_id: sessionId, message: msg, history }),
         });
 
         removeTyping();
 
         if (!res.ok) {
-          const e = await res.json().catch(() => ({}));
-          addMessage('bot', e.detail || 'Sorry, something went wrong. Please try again.');
+          const err = await res.json().catch(() => ({}));
+          const status = res.status;
+
+          if (status === 403) {
+            // Reservation limit hit (free tier or plan cap).
+            // The raw detail message is internal ("Free reservation limit of 10 reached.
+            // The restaurant needs to upgrade.") — not suitable for guests.
+            // Show a friendly guest-facing message instead.
+            addMessage('bot', 'I\'m sorry, reservations are temporarily unavailable. Please contact the restaurant directly.');
+            addErrorCard('Online booking is currently unavailable. Please call or visit us.');
+            // Lock the input — no point continuing
+            lockInput('Reservations currently unavailable');
+          } else if (status === 429) {
+            // Rate limited — 30 msgs/min per IP (rate_limit() in main.py)
+            addMessage('bot', 'You\'re sending messages a bit fast. Please wait a moment and try again.');
+          } else {
+            // 404 (restaurant not found), 502 (Claude API error), etc.
+            const detail = err.detail || 'Something went wrong. Please try again.';
+            addMessage('bot', detail);
+          }
         } else {
           const data = await res.json();
+
+          // data.reply — Claude's text response
           addMessage('bot', data.reply);
+
+          // data.history — updated List[ChatMessage] from the server.
+          // Replace local history so next turn has the full context.
           history = data.history;
 
+          // data.booking_made — true only when _execute_booking_tool() succeeded
+          // data.reservation_id — full 24-char ObjectId string (or null)
           if (data.booking_made && data.reservation_id) {
             bookingMade = true;
-            addConfirmCard(data.reservation_id.slice(0, 8).toUpperCase());
-            inputEl.disabled = true;
-            inputEl.placeholder = 'Your booking is confirmed ✓';
-            sendBtn.disabled = true;
+            addConfirmCard(data.reservation_id);
+            lockInput('Your booking is confirmed ✓');
           }
         }
       } catch (e) {
+        // Network failure (offline, timeout, etc.)
         removeTyping();
         addMessage('bot', 'Connection error. Please check your internet and try again.');
       } finally {
         sending = false;
         if (!bookingMade) sendBtn.disabled = false;
       }
+    }
+
+    // Disable input after booking confirmed or limit hit
+    function lockInput(placeholder) {
+      inputEl.disabled    = true;
+      inputEl.placeholder = placeholder;
+      sendBtn.disabled    = true;
     }
 
     function sendQuick(text) { sendMessage(text); }
@@ -327,10 +410,17 @@
       el.style.height = Math.min(el.scrollHeight, 100) + 'px';
     }
 
-    // Initial greeting
+    // ── Initial greeting ──────────────────────────────────────────────────────
+    // Shown locally — not sent to the API. The system prompt already tells Claude
+    // to greet the guest, so if the user's first message triggers an API call,
+    // Claude will respond naturally in context.
+    // restaurantName uses the JS variable (safely escaped via | tojson above).
     window.addEventListener('load', () => {
       setTimeout(() => {
-        addMessage('bot', 'Hello! Welcome to {{ restaurant_name }}. I\'m your AI reservation agent.\n\nHow many guests will be dining with us today?');
+        addMessage(
+          'bot',
+          `Hello! Welcome to ${restaurantName}. I'm your AI reservation agent.\n\nHow many guests will be dining with us today?`
+        );
       }, 400);
     });
   </script>
