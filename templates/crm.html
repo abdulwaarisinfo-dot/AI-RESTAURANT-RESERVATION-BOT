@@ -5,9 +5,9 @@
   {% include "_base_styles.html" %}
   <style>
     .page-title { font-size: 1.8rem; margin-bottom: 4px; }
-    .page-sub { font-size: .85rem; color: var(--text-3); margin-bottom: 28px; }
+    .page-sub   { font-size: .85rem; color: var(--text-3); margin-bottom: 24px; }
 
-    /* TABS */
+    /* ── TABS ────────────────────────────────────────────────────────── */
     .tabs {
       display: flex; gap: 2px; background: var(--bg-2);
       border: 1px solid var(--border); border-radius: var(--radius);
@@ -20,10 +20,10 @@
       color: var(--text-2); transition: all var(--transition);
     }
     .tab.active { background: var(--bg-3); color: var(--text); border: 1px solid var(--border); }
-    .tab-panel { display: none; }
+    .tab-panel  { display: none; }
     .tab-panel.active { display: block; }
 
-    /* TOOLBAR */
+    /* ── TOOLBAR ─────────────────────────────────────────────────────── */
     .toolbar {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
@@ -40,7 +40,7 @@
     .search-input:focus { border-color: var(--gold-dim); }
     .search-input::placeholder { color: var(--text-3); }
 
-    /* LIMIT CHIP */
+    /* ── LIMIT CHIP ──────────────────────────────────────────────────── */
     .limit-chip {
       display: inline-flex; align-items: center; gap: 6px;
       font-size: .75rem; color: var(--text-2);
@@ -48,54 +48,19 @@
       border-radius: var(--radius); padding: 4px 10px;
     }
 
-    /* FREE TIER BANNER */
-    .free-banner {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; flex-wrap: wrap;
+    /* ── TIME SLOTS ──────────────────────────────────────────────────── */
+    .slots-info-box {
       background: var(--bg-3); border: 1px solid var(--border);
-      border-left: 3px solid var(--gold);
-      border-radius: var(--radius); padding: 10px 14px;
-      margin-bottom: 20px; font-size: .83rem; color: var(--text-2);
+      border-left: 3px solid var(--gold); border-radius: var(--radius);
+      padding: 10px 14px; font-size: .8rem; color: var(--text-2); margin-bottom: 16px;
     }
-    .free-banner strong { color: var(--gold); }
+    .slots-info-box strong { color: var(--gold); }
 
-    /* USAGE BAR */
-    .usage-bar-wrap {
-      background: var(--bg-3); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 10px 14px; margin-bottom: 20px;
-    }
-    .usage-bar-label {
-      display: flex; justify-content: space-between;
-      font-size: .75rem; color: var(--text-3); margin-bottom: 6px;
-    }
-    .usage-bar-track { height: 4px; background: var(--bg-4); border-radius: 2px; overflow: hidden; }
-    .usage-bar-fill { height: 100%; border-radius: 2px; background: var(--gold); transition: width .4s ease; }
-    .usage-bar-fill.danger { background: var(--red); }
-
-    /* ACTION BTNS */
-    .action-btn {
-      width: 28px; height: 28px; border-radius: 4px;
-      border: 1px solid var(--border); background: transparent;
-      color: var(--text-2); cursor: pointer; font-size: .8rem;
-      display: inline-flex; align-items: center; justify-content: center;
-      transition: all var(--transition);
-    }
-    .action-btn:hover { border-color: var(--gold); color: var(--gold); }
-    .action-btn.del:hover { border-color: var(--red); color: var(--red); }
-
-    /* EMPTY STATE */
-    .empty-state { text-align: center; padding: 48px 24px; color: var(--text-3); font-size: .9rem; }
-    .empty-state div { font-size: 2rem; margin-bottom: 8px; opacity: .3; }
-
-    /* FORM */
-    .modal-form { display: flex; flex-direction: column; gap: 14px; }
-    .modal-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-    /* TIME SLOTS SPECIFIC */
     .slots-date-bar {
       display: flex; align-items: center; gap: 10px;
       background: var(--bg-3); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 10px 14px; margin-bottom: 20px; flex-wrap: wrap;
+      border-radius: var(--radius); padding: 10px 14px;
+      margin-bottom: 20px; flex-wrap: wrap;
     }
     .slots-date-bar label { font-size: .78rem; color: var(--text-3); }
     .slots-date-bar input[type=date] {
@@ -106,6 +71,23 @@
     }
     .slots-date-bar input[type=date]:focus { border-color: var(--gold-dim); }
 
+    /* Bulk form */
+    .bulk-form-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end;
+    }
+    .bulk-table-checks { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+    .table-check-label {
+      display: flex; align-items: center; gap: 5px;
+      font-size: .8rem; color: var(--text-2); cursor: pointer;
+      background: var(--bg-4); border: 1px solid var(--border);
+      border-radius: 4px; padding: 5px 10px; transition: all var(--transition);
+      user-select: none;
+    }
+    .table-check-label:hover { border-color: var(--gold-dim); }
+    .table-check-label input { accent-color: var(--gold); }
+    .table-check-label.checked { border-color: var(--gold); color: var(--gold); background: rgba(201,169,110,.07); }
+
+    /* Slot view */
     .table-slot-card {
       background: var(--bg-3); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px;
@@ -116,7 +98,6 @@
     }
     .table-slot-name { font-size: .9rem; color: var(--text); font-weight: 500; }
     .table-slot-meta { font-size: .75rem; color: var(--text-3); }
-
     .slot-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .slot-chip {
       display: inline-flex; align-items: center; gap: 5px;
@@ -128,62 +109,30 @@
     }
     .slot-chip.booked {
       background: rgba(220,80,80,.06); border-color: rgba(220,80,80,.25); color: var(--red);
-      text-decoration: line-through;
+      text-decoration: line-through; opacity: .75;
     }
-    .slot-chip.available .del-slot {
-      cursor: pointer; opacity: .5; transition: opacity .15s; font-size: .7rem; padding: 0; border: none;
+    .del-slot {
+      cursor: pointer; opacity: .5; transition: opacity .15s;
+      font-size: .7rem; padding: 0; border: none;
       background: none; color: inherit; line-height: 1;
     }
-    .slot-chip.available .del-slot:hover { opacity: 1; }
+    .del-slot:hover { opacity: 1; }
+    .no-slots-msg { font-size: .8rem; color: var(--text-3); font-style: italic; padding: 6px 0; }
 
-    .no-slots-msg {
-      font-size: .8rem; color: var(--text-3); font-style: italic; padding: 6px 0;
-    }
+    /* ── MODAL FORM ──────────────────────────────────────────────────── */
+    .modal-form { display: flex; flex-direction: column; gap: 14px; }
+    .modal-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-    /* BULK FORM */
-    .bulk-form-grid {
-      display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end;
+    /* ── RESERVATION LIMIT WARNING ───────────────────────────────────── */
+    .limit-warning {
+      background: var(--bg-3); border: 1px solid var(--red);
+      border-radius: var(--radius); padding: 8px 12px;
+      font-size: .8rem; color: var(--red);
     }
-    .bulk-table-checks {
-      display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0;
-    }
-    .table-check-label {
-      display: flex; align-items: center; gap: 5px;
-      font-size: .8rem; color: var(--text-2); cursor: pointer;
-      background: var(--bg-4); border: 1px solid var(--border);
-      border-radius: 4px; padding: 4px 10px; transition: all var(--transition);
-    }
-    .table-check-label:hover { border-color: var(--gold-dim); }
-    .table-check-label input { accent-color: var(--gold); }
-    .table-check-label.checked { border-color: var(--gold); color: var(--gold); background: rgba(212,175,55,.07); }
-
-    .slots-info-box {
-      background: var(--bg-3); border: 1px solid var(--border);
-      border-left: 3px solid var(--gold); border-radius: var(--radius);
-      padding: 10px 14px; font-size: .8rem; color: var(--text-2); margin-bottom: 16px;
-    }
-    .slots-info-box strong { color: var(--gold); }
-
-    /* TOAST */
-    .toast-container {
-      position: fixed; bottom: 24px; right: 24px;
-      display: flex; flex-direction: column; gap: 10px;
-      z-index: 9999; pointer-events: none;
-    }
-    .toast {
-      padding: 10px 16px; border-radius: var(--radius);
-      font-size: .83rem; color: #fff; opacity: 0;
-      transform: translateY(8px);
-      transition: opacity .25s, transform .25s;
-      max-width: 320px;
-    }
-    .toast.show  { opacity: 1; transform: translateY(0); }
-    .toast.success { background: var(--green, #5bb891); }
-    .toast.error   { background: #e55; }
 
     @media (max-width: 768px) {
       .modal-form-row { grid-template-columns: 1fr; }
-      .search-input { width: 140px; }
+      .search-input   { width: 140px; }
       .bulk-form-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
@@ -198,38 +147,44 @@
       <a href="/dashboard">Dashboard</a>
       <a href="/crm" class="active">CRM</a>
       <a href="/billing">Billing</a>
-      {# owner._id renders as ObjectId string — correct for /reserve/ URL #}
+      {# owner._id is ObjectId — str(owner["_id"]) done in crm_page() template context #}
       <a href="/reserve/{{ owner._id }}" target="_blank" class="btn btn-outline btn-sm">Booking Page ↗</a>
       <a href="/logout" class="btn btn-ghost btn-sm">Log Out</a>
     </div>
   </nav>
 
   <div class="app-shell">
+    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-section-label">Navigation</div>
       <a href="/dashboard" class="sidebar-link">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/>
-          <rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+          <rect x="1" y="1" width="6" height="6" rx="1"/>
+          <rect x="9" y="1" width="6" height="6" rx="1"/>
+          <rect x="1" y="9" width="6" height="6" rx="1"/>
+          <rect x="9" y="9" width="6" height="6" rx="1"/>
         </svg>
         Dashboard
       </a>
       <a href="/crm" class="sidebar-link active">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="8" cy="5" r="3"/><path d="M2 13c0-3 2.686-5 6-5s6 2 6 5"/>
+          <circle cx="8" cy="5" r="3"/>
+          <path d="M2 13c0-3 2.686-5 6-5s6 2 6 5"/>
         </svg>
         CRM
       </a>
       <a href="/reserve/{{ owner._id }}" target="_blank" class="sidebar-link">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="3" width="12" height="11" rx="1"/><path d="M5 1v3M11 1v3M2 7h12"/>
+          <rect x="2" y="3" width="12" height="11" rx="1"/>
+          <path d="M5 1v3M11 1v3M2 7h12"/>
         </svg>
         Booking Page
       </a>
       <div class="sidebar-section-label" style="margin-top:auto;">Account</div>
       <a href="/billing" class="sidebar-link">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="1" y="4" width="14" height="10" rx="1"/><path d="M1 7h14"/>
+          <rect x="1" y="4" width="14" height="10" rx="1"/>
+          <path d="M1 7h14"/>
         </svg>
         Billing
       </a>
@@ -239,74 +194,86 @@
         </svg>
         Log Out
       </a>
+
+      <!-- Plan widget -->
       <div style="padding:12px 16px;margin-top:8px;">
-        <div style="background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
-          <div style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px;">Current Plan</div>
-          <div style="font-size:.88rem;color:var(--gold);">{% if is_free_tier %}Free Tier{% else %}{{ plan.name }}{% endif %}</div>
-          <div style="font-size:.72rem;color:var(--text-3);margin-top:2px;">
-            {#
-              Use limits.tables_max (from _get_effective_limits) not plan.tables_max.
-              Free tier: limits.tables_max = FREE_TABLES_MAX = 3.
-              Paid tier: limits.tables_max = plan["tables_max"] from PLANS dict.
-            #}
+        <div class="plan-widget">
+          <div class="plan-widget-label">Current Plan</div>
+          {# is_free_tier = _is_free_tier(owner) from crm_page() #}
+          <div class="plan-widget-name">
+            {% if is_free_tier %}
+              <span style="color:var(--amber);">Free Tier</span>
+            {% else %}
+              {{ plan.name }}
+            {% endif %}
+          </div>
+          <div class="plan-widget-sub">
+            {# limits.tables_max: FREE_TABLES_MAX=3 on free tier, plan["tables_max"] on paid #}
             {{ tables|length }} / {{ limits.tables_max }} tables
           </div>
+          {% if is_free_tier %}
+          <div class="plan-widget-sub" style="color:var(--amber);margin-top:4px;">
+            {{ limits.reservations_left }} reservations left
+          </div>
+          {% endif %}
         </div>
       </div>
     </aside>
 
+    <!-- MAIN CONTENT -->
     <main class="main-content">
       <h1 class="page-title">CRM</h1>
-      {# owner.restaurant_name from the owners collection document #}
+      {# owner.restaurant_name from platform db owners collection #}
       <p class="page-sub">{{ owner.restaurant_name }} — manage tables, time slots, guests &amp; reservations</p>
 
+      {# FREE TIER BANNER
+         limits.reservations_left  — from _get_effective_limits()
+         free_reservations         — FREE_RESERVATIONS = 10 constant
+      #}
       {% if is_free_tier %}
-      <div class="free-banner">
-        <span>
-          <strong>Free Tier</strong> —
-          {# limits.reservations_left and free_reservations both from crm_page context #}
-          {{ limits.reservations_left }} of {{ free_reservations }} free reservations remaining.
-        </span>
+      <div class="free-tier-banner">
+        <div class="ft-left">
+          <div class="ft-icon">◆</div>
+          <span>
+            <strong>Free Tier</strong> —
+            {{ limits.reservations_left }} of {{ free_reservations }} free reservations remaining.
+            Up to {{ limits.tables_max }} tables.
+          </span>
+        </div>
         <a href="/billing" class="btn btn-primary btn-sm">Upgrade →</a>
       </div>
       {% endif %}
 
-      {#
-        usage_pct computed from limits dict keys:
-          limits.reservations_used  — set in _get_effective_limits()
-          limits.reservations_limit — same
-        Using Jinja2 inline calculation to avoid needing an extra context variable.
-      #}
-      {% set usage_pct = ((limits.reservations_used / limits.reservations_limit) * 100) | round | int if limits.reservations_limit > 0 else 0 %}
+      {# Usage bar — reservations_used / reservations_limit from _get_effective_limits() #}
+      {% set usage_pct = ((limits.reservations_used / limits.reservations_limit) * 100) | round | int
+                         if limits.reservations_limit > 0 else 0 %}
       <div class="usage-bar-wrap">
         <div class="usage-bar-label">
-          <span>Reservations used this period</span>
+          <span>Reservations used {% if is_free_tier %}(lifetime free){% else %}this period{% endif %}</span>
           <span>{{ limits.reservations_used }} / {{ limits.reservations_limit }}</span>
         </div>
         <div class="usage-bar-track">
-          <div class="usage-bar-fill {% if usage_pct >= 90 %}danger{% endif %}" style="width:{{ usage_pct }}%;"></div>
+          <div class="usage-bar-fill {% if usage_pct >= 90 %}danger{% elif usage_pct >= 70 %}warning{% endif %}"
+               style="width:{{ usage_pct }}%;"></div>
         </div>
       </div>
 
-      <!-- TABS — 4 tabs: Tables, Time Slots, Guests, Reservations -->
+      <!-- TABS -->
       <div class="tabs">
-        <button class="tab active"  onclick="switchTab('tables', this)">Tables ({{ tables|length }})</button>
-        <button class="tab"         onclick="switchTab('slots', this)">⏱ Time Slots</button>
-        <button class="tab"         onclick="switchTab('guests', this)">Guests ({{ guests|length }})</button>
-        <button class="tab"         onclick="switchTab('reservations', this)">Reservations ({{ reservations|length }})</button>
+        <button class="tab active" onclick="switchTab('tables', this)">Tables ({{ tables|length }})</button>
+        <button class="tab"        onclick="switchTab('slots',  this)">⏱ Time Slots</button>
+        <button class="tab"        onclick="switchTab('guests', this)">Guests ({{ guests|length }})</button>
+        <button class="tab"        onclick="switchTab('reservations', this)">Reservations ({{ reservations|length }})</button>
       </div>
 
-      <!-- ══ TABLES TAB ══ -->
+      <!-- ══ TABLES TAB ══════════════════════════════════════════════════ -->
       <div id="tab-tables" class="tab-panel active">
         <div class="toolbar">
           <span class="toolbar-title">Tables</span>
           <div class="toolbar-right">
-            {#
-              limits.tables_max is the enforced cap (_check_table_limit uses this).
-              For free tier = FREE_TABLES_MAX (3); paid = plan["tables_max"].
-            #}
+            {# limits.tables_max: _check_table_limit() enforces this server-side #}
             <span class="limit-chip">{{ tables|length }} / {{ limits.tables_max }} max</span>
-            <button class="btn btn-primary btn-sm" onclick="openModal('modal-table', false)">+ Add Table</button>
+            <button class="btn btn-primary btn-sm" onclick="openTableModal(false)">+ Add Table</button>
           </div>
         </div>
         <div class="card" style="padding:0;">
@@ -324,8 +291,10 @@
                 <td>{{ t.capacity }} pax</td>
                 <td><span class="badge badge-muted">{{ t.location }}</span></td>
                 <td>
-                  {# t.id set via  t["id"] = str(t.pop("_id"))  in crm_page() #}
-                  <button class="action-btn" onclick="editTable('{{ t.id }}','{{ t.table_number }}','{{ t.capacity }}','{{ t.location }}')" title="Edit">✎</button>
+                  {# t.id = str(t.pop("_id")) from crm_page() #}
+                  <button class="action-btn"
+                    onclick="openTableModal(true,'{{ t.id }}','{{ t.table_number }}','{{ t.capacity }}','{{ t.location }}')"
+                    title="Edit">✎</button>
                   <button class="action-btn del" onclick="deleteTable('{{ t.id }}')" title="Delete">✕</button>
                 </td>
               </tr>
@@ -333,24 +302,25 @@
             </tbody>
           </table>
           {% else %}
-          <div class="empty-state"><div>⬡</div>No tables added yet. Add your first table to get started.</div>
+          <div class="empty-state">
+            <div class="empty-icon">⬡</div>
+            No tables added yet. Add your first table to get started.
+          </div>
           {% endif %}
         </div>
       </div>
 
-      <!-- ══ TIME SLOTS TAB ══ -->
+      <!-- ══ TIME SLOTS TAB ══════════════════════════════════════════════ -->
       <div id="tab-slots" class="tab-panel">
-
         <div class="slots-info-box">
           <strong>How Time Slots work:</strong>
-          Owner defines when each table is open for reservations.
-          Guests can only book slots you define here.
-          If no slots are set for a date, the AI bot will say "not accepting reservations."
-          Unlimited slots — only actual reservations count toward your plan limit.
+          Define when each table is open for bookings. Guests can only book slots you define here.
+          If no slots are set for a date, the AI bot says "not accepting reservations."
+          Slots are unlimited — only actual <em>reservations</em> count toward your plan limit.
+          You can schedule any future date on any plan.
         </div>
 
-        <!-- Date selector: TODAY_STR is injected by JS (see bottom) since crm_page
-             does not pass `today` in context. The input value is set via JS on DOMContentLoaded. -->
+        <!-- Date picker — crm_page() does not pass `today`; set via JS -->
         <div class="slots-date-bar">
           <label>Viewing date:</label>
           <input type="date" id="slots-date" onchange="loadSlots(this.value)" />
@@ -361,10 +331,8 @@
         <div class="card" style="margin-bottom:20px;">
           <div class="toolbar" style="margin-bottom:12px;">
             <span class="toolbar-title">Add Slots for a Day</span>
-            <span style="font-size:.75rem;color:var(--text-3);">Select tables + time range → auto-generate slots</span>
+            <span style="font-size:.75rem;color:var(--text-3);">Pick tables + time range → auto-generate slots</span>
           </div>
-
-          <!-- Table checkboxes: rendered from {{ tables }} passed by crm_page() -->
           <div style="font-size:.75rem;color:var(--text-3);margin-bottom:6px;">Select tables:</div>
           <div class="bulk-table-checks" id="bulk-table-checks">
             {% for t in tables %}
@@ -377,16 +345,12 @@
             <span style="font-size:.8rem;color:var(--text-3);">No tables yet — add tables first.</span>
             {% endif %}
           </div>
-
           {% if tables %}
           <div style="display:flex;gap:8px;margin-bottom:14px;">
             <button class="btn btn-ghost btn-sm" onclick="selectAllTables()">Select All</button>
             <button class="btn btn-ghost btn-sm" onclick="selectNoneTables()">Clear</button>
           </div>
           {% endif %}
-
-          <!-- Time range + duration —
-               bulk-date defaults to today (set via JS, not {{ today }} which isn't in context) -->
           <div class="bulk-form-grid" style="margin-bottom:12px;">
             <div class="form-group">
               <label class="form-label">Date</label>
@@ -411,31 +375,32 @@
               </select>
             </div>
           </div>
-
           <div id="bulk-preview" style="font-size:.78rem;color:var(--text-3);margin-bottom:12px;min-height:18px;"></div>
-
-          <button class="btn btn-primary" onclick="bulkAddSlots()">
-            ＋ Generate &amp; Save Slots
-          </button>
+          {# POST /api/crm/timeslots/bulk → api_bulk_create_timeslots()
+             Body: BulkTimeSlotsIn { table_ids, date, start_time, end_time, duration_mins }
+             v4.2: No date horizon limits — any future date accepted #}
+          <button class="btn btn-primary" onclick="bulkAddSlots()">＋ Generate &amp; Save Slots</button>
         </div>
 
-        <!-- Live slot viewer — populated by loadSlots() via /api/crm/timeslots?date= -->
+        <!-- Slot viewer -->
         <div class="toolbar" style="margin-bottom:12px;">
           <span class="toolbar-title">Slot Schedule</span>
-          <button class="btn btn-outline btn-sm" onclick="loadSlots(document.getElementById('slots-date').value)">↻ Refresh</button>
+          <button class="btn btn-outline btn-sm"
+            onclick="loadSlots(document.getElementById('slots-date').value)">↻ Refresh</button>
         </div>
         <div id="slots-view">
-          <div class="empty-state"><div>⏱</div>Loading today's slots…</div>
+          <div class="empty-state"><div class="empty-icon">⏱</div>Loading today's slots…</div>
         </div>
       </div>
 
-      <!-- ══ GUESTS TAB ══ -->
+      <!-- ══ GUESTS TAB ══════════════════════════════════════════════════ -->
       <div id="tab-guests" class="tab-panel">
         <div class="toolbar">
           <span class="toolbar-title">Guests</span>
           <div class="toolbar-right">
-            <input class="search-input" type="text" placeholder="Search guests…" oninput="filterGuests(this.value)" />
-            <button class="btn btn-primary btn-sm" onclick="openModal('modal-guest', false)">+ Add Guest</button>
+            <input class="search-input" type="text" placeholder="Search guests…"
+              oninput="filterGuests(this.value)" />
+            <button class="btn btn-primary btn-sm" onclick="openGuestModal(false)">+ Add Guest</button>
           </div>
         </div>
         <div class="card" style="padding:0;">
@@ -443,26 +408,35 @@
           <table class="data-table" id="guests-table">
             <thead>
               <tr>
-                <th>Name</th><th>Phone</th><th>Email</th><th>Visits</th><th>Notes</th><th>Actions</th>
+                <th>Name</th><th>Phone</th><th>Email</th>
+                <th>Visits</th><th>Notes</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for g in guests %}
-              <tr class="guest-filterable">
+              <tr class="guest-row">
                 <td>
                   <div style="display:flex;align-items:center;gap:8px;">
-                    <div style="width:26px;height:26px;border-radius:50%;background:var(--bg-4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.72rem;color:var(--gold);">{{ g.name[0]|upper }}</div>
+                    <div style="width:26px;height:26px;border-radius:50%;background:var(--bg-4);
+                      border:1px solid var(--border);display:flex;align-items:center;
+                      justify-content:center;font-size:.72rem;color:var(--gold);">
+                      {{ g.name[0]|upper }}
+                    </div>
                     <strong style="color:var(--text);">{{ g.name }}</strong>
                   </div>
                 </td>
                 <td>{{ g.phone or '—' }}</td>
                 <td>{{ g.email or '—' }}</td>
-                {# g.visit_count — incremented by both CRM API and AI agent #}
+                {# g.visit_count incremented by CRM API and AI agent on each booking #}
                 <td><span class="badge badge-gold">{{ g.visit_count }}</span></td>
-                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.notes or '—' }}</td>
+                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  {{ g.notes or '—' }}
+                </td>
                 <td>
-                  {# g.id set via  g["id"] = str(g.pop("_id"))  in crm_page() #}
-                  <button class="action-btn" onclick="editGuest('{{ g.id }}','{{ g.name }}','{{ g.phone or '' }}','{{ g.email or '' }}','{{ g.notes or '' }}')" title="Edit">✎</button>
+                  {# g.id = str(g.pop("_id")) from crm_page() #}
+                  <button class="action-btn"
+                    onclick="openGuestModal(true,'{{ g.id }}','{{ g.name }}','{{ g.phone or '' }}','{{ g.email or '' }}','{{ (g.notes or '')|replace("'","\\'")|replace('"','\\"') }}')"
+                    title="Edit">✎</button>
                   <button class="action-btn del" onclick="deleteGuest('{{ g.id }}')" title="Delete">✕</button>
                 </td>
               </tr>
@@ -470,18 +444,22 @@
             </tbody>
           </table>
           {% else %}
-          <div class="empty-state"><div>◉</div>No guests yet. They'll be added automatically when the AI books a reservation.</div>
+          <div class="empty-state">
+            <div class="empty-icon">◉</div>
+            No guests yet. They're added automatically when the AI books a reservation.
+          </div>
           {% endif %}
         </div>
       </div>
 
-      <!-- ══ RESERVATIONS TAB ══ -->
+      <!-- ══ RESERVATIONS TAB ════════════════════════════════════════════ -->
       <div id="tab-reservations" class="tab-panel">
         <div class="toolbar">
           <span class="toolbar-title">Reservations</span>
           <div class="toolbar-right">
-            <input type="date" class="search-input" id="date-filter" style="width:auto;" onchange="filterByDate(this.value)" />
-            <button class="btn btn-primary btn-sm" onclick="openModal('modal-reservation', false)">+ Add Reservation</button>
+            <input type="date" class="search-input" id="date-filter"
+              style="width:auto;" onchange="filterByDate(this.value)" />
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-reservation')">+ Add Reservation</button>
           </div>
         </div>
         <div class="card" style="padding:0;">
@@ -489,31 +467,34 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Ref</th><th>Guest ID</th><th>Table ID</th><th>Date</th>
+                <th>Ref</th><th>Guest</th><th>Table</th><th>Date</th>
                 <th>Time</th><th>Party</th><th>Status</th><th>Source</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for r in reservations %}
               <tr>
-                {# r.id = str(r.pop("_id")) from crm_page — same pattern as dashboard #}
                 <td style="font-family:monospace;font-size:.75rem;">{{ r.id[:8]|upper }}</td>
-                {# r.guest_id and r.table_id are raw ObjectId strings stored in reservation doc #}
+                {# r.guest_id and r.table_id are raw ObjectId strings #}
                 <td style="font-family:monospace;font-size:.75rem;color:var(--text-3);">{{ r.guest_id[:8] }}…</td>
                 <td style="font-family:monospace;font-size:.75rem;color:var(--text-3);">{{ r.table_id[:8] }}…</td>
                 <td>{{ r.date }}</td>
                 <td>{{ r.time_slot }}</td>
                 <td>{{ r.party_size }}</td>
                 <td>
-                  <span class="badge {% if r.status == 'confirmed' %}badge-green{% else %}badge-red{% endif %}">{{ r.status }}</span>
+                  <span class="badge {% if r.status == 'confirmed' %}badge-green{% else %}badge-red{% endif %}">
+                    {{ r.status }}
+                  </span>
                 </td>
                 <td>
-                  {# r.source = "ai_agent" for AI bookings; absent/None for manual CRM entries #}
-                  <span class="badge {% if r.source == 'ai_agent' %}badge-gold{% else %}badge-muted{% endif %}">{{ r.source or 'manual' }}</span>
+                  {# r.source = "ai_agent" for AI bookings, absent for manual CRM entries #}
+                  <span class="badge {% if r.source == 'ai_agent' %}badge-gold{% else %}badge-muted{% endif %}">
+                    {{ r.source or 'manual' }}
+                  </span>
                 </td>
                 <td>
                   {% if r.status == 'confirmed' %}
-                  {# PATCH /api/crm/reservations/{res_id}/cancel — matches api_cancel_reservation() #}
+                  {# PATCH /api/crm/reservations/{res_id}/cancel → api_cancel_reservation() #}
                   <button class="action-btn del" onclick="cancelRes('{{ r.id }}')" title="Cancel">✕</button>
                   {% else %}
                   <span style="color:var(--text-3);font-size:.75rem;">—</span>
@@ -524,17 +505,22 @@
             </tbody>
           </table>
           {% else %}
-          <div class="empty-state"><div>◈</div>No reservations yet.</div>
+          <div class="empty-state">
+            <div class="empty-icon">◈</div>
+            No reservations yet.
+          </div>
           {% endif %}
         </div>
       </div>
-
     </main>
   </div>
 
-  <!-- ═══ MODALS ═══ -->
+  <!-- ══ MODALS ═══════════════════════════════════════════════════════════ -->
 
-  <!-- Add/Edit Table -->
+  <!-- Add / Edit Table
+       POST /api/crm/tables      → api_create_table() — checks _check_table_limit()
+       PUT  /api/crm/tables/{id} → api_update_table()
+  -->
   <div id="modal-table" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
@@ -546,11 +532,11 @@
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Table Number</label>
-            <input class="form-input" type="number" id="table-number" placeholder="e.g. 5" min="1" required />
+            <input class="form-input" type="number" id="table-number" placeholder="e.g. 5" min="1" />
           </div>
           <div class="form-group">
             <label class="form-label">Capacity (pax)</label>
-            <input class="form-input" type="number" id="table-capacity" placeholder="e.g. 4" min="1" required />
+            <input class="form-input" type="number" id="table-capacity" placeholder="e.g. 4" min="1" />
           </div>
         </div>
         <div class="form-group">
@@ -565,7 +551,10 @@
     </div>
   </div>
 
-  <!-- Add/Edit Guest -->
+  <!-- Add / Edit Guest
+       POST /api/crm/guests      → api_create_guest()
+       PUT  /api/crm/guests/{id} → api_update_guest()
+  -->
   <div id="modal-guest" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
@@ -576,7 +565,7 @@
         <input type="hidden" id="guest-edit-id" />
         <div class="form-group">
           <label class="form-label">Full Name</label>
-          <input class="form-input" type="text" id="guest-name" placeholder="e.g. Sarah Johnson" required />
+          <input class="form-input" type="text" id="guest-name" placeholder="e.g. Sarah Johnson" />
         </div>
         <div class="modal-form-row">
           <div class="form-group">
@@ -600,7 +589,11 @@
     </div>
   </div>
 
-  <!-- Add Reservation -->
+  <!-- Add Reservation
+       POST /api/crm/reservations → api_create_reservation()
+       Checks _check_reservation_limit() server-side
+       Body: ReservationIn { guest_id, table_id, date, time_slot, party_size, notes }
+  -->
   <div id="modal-reservation" class="modal-overlay">
     <div class="modal" style="max-width:520px;">
       <div class="modal-header">
@@ -613,46 +606,49 @@
             <label class="form-label">Guest</label>
             <select class="form-select" id="res-guest">
               <option value="">Select guest…</option>
-              {# guests list from crm_page() — g.id = str(_id) #}
-              {% for g in guests %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
+              {% for g in guests %}
+              <option value="{{ g.id }}">{{ g.name }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">Table</label>
             <select class="form-select" id="res-table">
               <option value="">Select table…</option>
-              {# tables list from crm_page() — t.id = str(_id) #}
-              {% for t in tables %}<option value="{{ t.id }}">Table {{ t.table_number }} ({{ t.capacity }} pax)</option>{% endfor %}
+              {% for t in tables %}
+              <option value="{{ t.id }}">Table {{ t.table_number }} ({{ t.capacity }} pax)</option>
+              {% endfor %}
             </select>
           </div>
         </div>
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Date</label>
-            <input class="form-input" type="date" id="res-date" required />
+            <input class="form-input" type="date" id="res-date" />
           </div>
           <div class="form-group">
             <label class="form-label">Time (HH:MM)</label>
-            <input class="form-input" type="time" id="res-time" required />
+            <input class="form-input" type="time" id="res-time" />
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Party Size</label>
-          <input class="form-input" type="number" id="res-party" min="1" placeholder="e.g. 4" required />
+          <input class="form-input" type="number" id="res-party" min="1" placeholder="e.g. 4" />
         </div>
         <div class="form-group">
           <label class="form-label">Notes</label>
           <input class="form-input" type="text" id="res-notes" placeholder="Special requests…" />
         </div>
-        {# limits.reservations_left from _get_effective_limits() — 0 means at cap #}
+        {# limits.reservations_left = 0 means at cap — _check_reservation_limit() will 403 #}
         {% if limits.reservations_left == 0 %}
-        <div style="background:var(--bg-3);border:1px solid var(--red);border-radius:var(--radius);padding:8px 12px;font-size:.8rem;color:var(--red);">
-          Reservation limit reached. <a href="/billing" style="color:var(--gold);">Upgrade your plan</a> to continue.
+        <div class="limit-warning">
+          Reservation limit reached.
+          <a href="/billing" style="color:var(--gold);">Upgrade your plan</a> to continue.
         </div>
         {% endif %}
         <div style="display:flex;gap:10px;margin-top:6px;">
           <button class="btn btn-primary" style="flex:1;" onclick="saveReservation()"
-            {% if limits.reservations_left == 0 %}disabled title="Upgrade to add more reservations"{% endif %}>
+            {% if limits.reservations_left == 0 %}disabled title="Upgrade to add more"{% endif %}>
             Confirm Reservation
           </button>
           <button class="btn btn-ghost" onclick="closeModal('modal-reservation')">Cancel</button>
@@ -661,7 +657,11 @@
     </div>
   </div>
 
-  <!-- Single Slot Modal -->
+  <!-- Add Single Slot
+       POST /api/crm/timeslots/single → api_add_single_timeslot()
+       Body: TimeSlotIn { table_id, date, start_time, end_time }
+       v4.2: No date horizon limits
+  -->
   <div id="modal-single-slot" class="modal-overlay">
     <div class="modal" style="max-width:420px;">
       <div class="modal-header">
@@ -673,7 +673,9 @@
           <label class="form-label">Table</label>
           <select class="form-select" id="ss-table">
             <option value="">Select table…</option>
-            {% for t in tables %}<option value="{{ t.id }}">Table {{ t.table_number }} ({{ t.capacity }} pax)</option>{% endfor %}
+            {% for t in tables %}
+            <option value="{{ t.id }}">Table {{ t.table_number }} ({{ t.capacity }} pax)</option>
+            {% endfor %}
           </select>
         </div>
         <div class="form-group">
@@ -698,77 +700,35 @@
     </div>
   </div>
 
-  <!-- TOAST CONTAINER -->
-  <div class="toast-container" id="toast-container"></div>
-
   <script>
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    // Required by all async operations in this page.
-    // Was called everywhere in the original but never defined.
-    function showToast(message, type = 'success') {
-      const container = document.getElementById('toast-container');
-      const toast     = document.createElement('div');
-      toast.className = `toast ${type}`;
-      toast.textContent = message;
-      container.appendChild(toast);
-      requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('show')));
-      setTimeout(() => {
-        toast.classList.remove('show');
-        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-      }, 4000);
-    }
-
-    // ── Today's date ─────────────────────────────────────────────────────────
-    // crm_page() in main.py does NOT pass `today` in the template context,
-    // so we cannot use {{ today }}. Compute it client-side instead.
+    // ── Today's date ─────────────────────────────────────────────────────
+    // crm_page() does NOT pass `today` in context — computed client-side.
     const TODAY = new Date().toISOString().slice(0, 10);
 
-    // ── Tabs ─────────────────────────────────────────────────────────────────
+    // ── Tab switching ─────────────────────────────────────────────────────
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
       btn.classList.add('active');
-      // Auto-load slots whenever the Time Slots tab becomes visible
       if (name === 'slots') loadSlots(document.getElementById('slots-date').value || TODAY);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Guest search ──────────────────────────────────────────────────────
     function filterGuests(q) {
       q = q.toLowerCase();
-      document.querySelectorAll('.guest-filterable').forEach(row => {
+      document.querySelectorAll('.guest-row').forEach(row => {
         row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
       });
     }
+
+    // ── Reservation date filter — reloads /crm?date= ──────────────────────
     function filterByDate(date) {
       if (!date) { location.href = '/crm'; return; }
       location.href = `/crm?date=${date}`;
     }
-    function getToken() {
-      return document.cookie.split(';')
-        .find(c => c.trim().startsWith('access_token='))?.split('=')[1] || '';
-    }
 
-    // Generic fetch wrapper — sends JWT from httpOnly cookie via Authorization header.
-    // Note: httpOnly cookies can't be read by JS; getToken() will always return ''.
-    // The server reads the cookie directly via request.cookies.get("access_token"),
-    // so passing credentials: 'include' is the correct approach for cookie-auth APIs.
-    async function api(method, url, body) {
-      const opts = {
-        method,
-        credentials: 'include',   // sends the httpOnly cookie automatically
-        headers: { 'Content-Type': 'application/json' },
-      };
-      if (body) opts.body = JSON.stringify(body);
-      const res = await fetch(url, opts);
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.detail || `Request failed (${res.status})`);
-      }
-      return res.json();
-    }
-
-    // ── Table checkbox UI ─────────────────────────────────────────────────────
+    // ── Checkbox UI ───────────────────────────────────────────────────────
     function toggleCheck(label) {
       setTimeout(() => {
         const cb = label.querySelector('input');
@@ -791,36 +751,36 @@
       updateBulkPreview();
     }
     function updateBulkPreview() {
-      const start  = document.getElementById('bulk-start').value;
-      const end    = document.getElementById('bulk-end').value;
-      const dur    = +document.getElementById('bulk-duration').value;
-      const tables = [...document.querySelectorAll('[name=bulk-tables]:checked')].length;
+      const start   = document.getElementById('bulk-start').value;
+      const end     = document.getElementById('bulk-end').value;
+      const dur     = +document.getElementById('bulk-duration').value;
+      const tCount  = [...document.querySelectorAll('[name=bulk-tables]:checked')].length;
       const preview = document.getElementById('bulk-preview');
-      if (!start || !end || !dur || start >= end) { preview.textContent = ''; return; }
+      if (!start || !end || start >= end) { preview.textContent = ''; return; }
       const [sh, sm] = start.split(':').map(Number);
       const [eh, em] = end.split(':').map(Number);
       const totalMins = (eh * 60 + em) - (sh * 60 + sm);
       const count = Math.floor(totalMins / dur);
       if (count <= 0) { preview.textContent = 'No slots — adjust times.'; return; }
-      preview.textContent = `→ Will create ${count} slot${count > 1 ? 's' : ''} per table × ${tables} table${tables !== 1 ? 's' : ''} = ${count * tables} total slots`;
+      preview.textContent = `→ ${count} slot${count > 1 ? 's' : ''} per table × ${tCount} table${tCount !== 1 ? 's' : ''} = ${count * tCount} total slots`;
     }
     ['bulk-start','bulk-end','bulk-duration'].forEach(id =>
       document.getElementById(id)?.addEventListener('change', updateBulkPreview)
     );
 
-    // ── TIME SLOTS ────────────────────────────────────────────────────────────
+    // ── TIME SLOTS ────────────────────────────────────────────────────────
     // GET /api/crm/timeslots?date=YYYY-MM-DD → api_list_timeslots()
-    // Returns: { date, tables: [{table_id, table_number, capacity, location, slots: [{start, end, status}]}] }
+    // Returns: { date, tables: [{table_id, table_number, capacity, location, slots[]}] }
     async function loadSlots(date) {
       if (!date) return;
       const view = document.getElementById('slots-view');
-      view.innerHTML = '<div class="empty-state"><div style="font-size:1.2rem;opacity:.5;">⏳</div>Loading…</div>';
+      view.innerHTML = '<div class="empty-state"><div class="empty-icon" style="opacity:.3;">⏳</div>Loading…</div>';
       document.getElementById('slots-date-label').textContent = '';
       try {
         const data = await api('GET', `/api/crm/timeslots?date=${date}`);
         renderSlots(data, date);
       } catch (e) {
-        view.innerHTML = `<div class="empty-state"><div>⚠</div>${e.message}</div>`;
+        view.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠</div>${e.message}</div>`;
       }
     }
 
@@ -828,7 +788,7 @@
       const view   = document.getElementById('slots-view');
       const tables = data.tables || [];
       if (!tables.length) {
-        view.innerHTML = '<div class="empty-state"><div>⬡</div>No tables found. Add tables first.</div>';
+        view.innerHTML = '<div class="empty-state"><div class="empty-icon">⬡</div>No tables found. Add tables first.</div>';
         return;
       }
       let totalAvail = 0, totalBooked = 0;
@@ -838,17 +798,14 @@
       const summary = `${totalAvail} available · ${totalBooked} booked`;
       document.getElementById('slots-date-label').textContent = summary;
 
-      // Gather all table_ids for "Clear All" (uses the bulk-table checkboxes which
-      // are rendered from server-side {{ tables }}, so they always match)
-      const allTableIds = [...document.querySelectorAll('[name=bulk-tables]')].map(cb => cb.value);
-
       let html = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;
+          margin-bottom:14px;flex-wrap:wrap;gap:8px;">
           <div style="font-size:.78rem;color:var(--text-3);">${summary}</div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-outline btn-sm" onclick="openSingleSlotModal('${date}')">+ Single Slot</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red);"
-              onclick="clearDaySlots('${date}')">✕ Clear All for Day</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(224,82,82,.3);"
+              onclick="clearDaySlots('${date}')">✕ Clear All</button>
           </div>
         </div>`;
 
@@ -860,27 +817,28 @@
             <div class="table-slot-header">
               <div>
                 <div class="table-slot-name">Table ${t.table_number}
-                  ${allBooked  ? '<span class="badge badge-red"  style="margin-left:6px;font-size:.68rem;">Fully Booked</span>' : ''}
-                  ${!hasSlots  ? '<span class="badge badge-muted" style="margin-left:6px;font-size:.68rem;">No Slots</span>'     : ''}
+                  ${allBooked  ? '<span class="badge badge-red"   style="margin-left:6px;font-size:.67rem;">Fully Booked</span>' : ''}
+                  ${!hasSlots  ? '<span class="badge badge-muted" style="margin-left:6px;font-size:.67rem;">No Slots</span>'     : ''}
                 </div>
                 <div class="table-slot-meta">${t.capacity} pax · ${t.location}</div>
               </div>
               <div style="display:flex;gap:6px;">
                 ${hasSlots
-                  ? `<button class="btn btn-ghost btn-sm" style="font-size:.72rem;color:var(--red);border-color:var(--red);"
-                       onclick="clearTableSlots('${t.table_id}','${date}')">Clear Table</button>`
+                  ? `<button class="btn btn-ghost btn-sm"
+                      style="font-size:.72rem;color:var(--red);border-color:rgba(224,82,82,.3);"
+                      onclick="clearTableSlots('${t.table_id}','${date}')">Clear Table</button>`
                   : ''}
               </div>
             </div>
             <div class="slot-chips">`;
 
         if (!hasSlots) {
-          html += `<span class="no-slots-msg">No slots defined — bot will say "not taking reservations" for this table.</span>`;
+          html += `<span class="no-slots-msg">No slots — bot will say "not taking reservations" for this table.</span>`;
         } else {
           t.slots.forEach(s => {
             if (s.status === 'available') {
-              // start_time contains ':' — must URL-encode for the DELETE route
               // DELETE /api/crm/timeslots/{table_id}/{date}/{start_time}
+              // start_time must be URL-encoded (: → %3A) for path parsing
               const encStart = encodeURIComponent(s.start);
               html += `
                 <span class="slot-chip available">
@@ -896,45 +854,37 @@
         }
         html += `</div></div>`;
       });
-
       view.innerHTML = html;
     }
 
-    // Open single-slot modal and pre-fill the date
     function openSingleSlotModal(date) {
       document.getElementById('ss-date').value = date;
-      openModal('modal-single-slot', false);
+      openModal('modal-single-slot');
     }
 
     // POST /api/crm/timeslots/bulk → api_bulk_create_timeslots()
-    // Body: { table_ids, date, start_time, end_time, duration_mins }
     async function bulkAddSlots() {
       const tableIds = [...document.querySelectorAll('[name=bulk-tables]:checked')].map(cb => cb.value);
       const date     = document.getElementById('bulk-date').value;
       const start    = document.getElementById('bulk-start').value;
       const end      = document.getElementById('bulk-end').value;
       const dur      = +document.getElementById('bulk-duration').value;
-      if (!tableIds.length) return showToast('Select at least one table.', 'error');
-      if (!date)            return showToast('Pick a date.', 'error');
-      if (!start || !end)   return showToast('Set start and end time.', 'error');
-      if (start >= end)     return showToast('End time must be after start.', 'error');
+      if (!tableIds.length)   return showToast('Select at least one table.', 'error');
+      if (!date)              return showToast('Pick a date.', 'error');
+      if (!start || !end)     return showToast('Set start and end time.', 'error');
+      if (start >= end)       return showToast('End time must be after start.', 'error');
       try {
         const res = await api('POST', '/api/crm/timeslots/bulk', {
-          table_ids:     tableIds,
-          date,
-          start_time:    start,
-          end_time:      end,
-          duration_mins: dur,
+          table_ids: tableIds, date,
+          start_time: start, end_time: end, duration_mins: dur,
         });
         showToast(`✓ ${res.slots_per_table} slots added for ${res.tables_updated.length} table(s).`, 'success');
-        // Sync view date to the newly created date and reload
         document.getElementById('slots-date').value = date;
         loadSlots(date);
       } catch (e) { showToast(e.message, 'error'); }
     }
 
     // POST /api/crm/timeslots/single → api_add_single_timeslot()
-    // Body: { table_id, date, start_time, end_time }
     async function saveSingleSlot() {
       const table_id   = document.getElementById('ss-table').value;
       const date       = document.getElementById('ss-date').value;
@@ -946,15 +896,12 @@
         await api('POST', '/api/crm/timeslots/single', { table_id, date, start_time, end_time });
         showToast('Slot added.', 'success');
         closeModal('modal-single-slot');
-        // Refresh the slot view for the same date
         document.getElementById('slots-date').value = date;
         loadSlots(date);
       } catch (e) { showToast(e.message, 'error'); }
     }
 
     // DELETE /api/crm/timeslots/{table_id}/{date}/{start_time}
-    // → api_delete_single_slot()
-    // start_time must be URL-encoded (':' → '%3A') to survive FastAPI path parsing.
     async function deleteSingleSlot(tableId, date, encodedStart) {
       try {
         await api('DELETE', `/api/crm/timeslots/${tableId}/${date}/${encodedStart}`);
@@ -964,7 +911,6 @@
     }
 
     // DELETE /api/crm/timeslots  body: { table_ids: [id], date }
-    // → api_delete_timeslots() — deletes ALL slots for the given tables on a date
     async function clearTableSlots(tableId, date) {
       if (!confirm(`Remove ALL slots for this table on ${date}?`)) return;
       try {
@@ -975,27 +921,35 @@
     }
 
     async function clearDaySlots(date) {
-      if (!confirm(`Remove ALL slots for ALL tables on ${date}? This cannot be undone.`)) return;
-      // Collect every table_id from the bulk checkboxes (mirrors server-side tables list)
-      const allTableIds = [...document.querySelectorAll('[name=bulk-tables]')].map(cb => cb.value);
+      if (!confirm(`Remove ALL slots for ALL tables on ${date}? Cannot be undone.`)) return;
+      const allIds = [...document.querySelectorAll('[name=bulk-tables]')].map(cb => cb.value);
       try {
-        await api('DELETE', '/api/crm/timeslots', { table_ids: allTableIds, date });
+        await api('DELETE', '/api/crm/timeslots', { table_ids: allIds, date });
         showToast('All slots cleared for the day.', 'success');
         loadSlots(date);
       } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // ── TABLES ────────────────────────────────────────────────────────────────
-    function editTable(id, num, cap, loc) {
-      document.getElementById('table-edit-id').value   = id;
-      document.getElementById('table-number').value    = num;
-      document.getElementById('table-capacity').value  = cap;
-      document.getElementById('table-location').value  = loc;
-      document.getElementById('table-modal-title').textContent = 'Edit Table';
-      openModal('modal-table', true);
+    // ── TABLES ────────────────────────────────────────────────────────────
+    function openTableModal(isEdit, id, num, cap, loc) {
+      if (!isEdit) {
+        document.getElementById('table-edit-id').value  = '';
+        document.getElementById('table-modal-title').textContent = 'Add Table';
+        document.getElementById('table-number').value   = '';
+        document.getElementById('table-capacity').value = '';
+        document.getElementById('table-location').value = 'main';
+      } else {
+        document.getElementById('table-edit-id').value  = id;
+        document.getElementById('table-modal-title').textContent = 'Edit Table';
+        document.getElementById('table-number').value   = num;
+        document.getElementById('table-capacity').value = cap;
+        document.getElementById('table-location').value = loc;
+      }
+      openModal('modal-table');
     }
-    // PUT /api/crm/tables/{id}  body: TableIn  → api_update_table()
-    // POST /api/crm/tables      body: TableIn  → api_create_table()
+
+    // POST /api/crm/tables → api_create_table()   checks _check_table_limit()
+    // PUT  /api/crm/tables/{id} → api_update_table()
     async function saveTable() {
       const id  = document.getElementById('table-edit-id').value;
       const num = +document.getElementById('table-number').value;
@@ -1004,16 +958,17 @@
       if (!num || !cap) return showToast('Table number and capacity required.', 'error');
       try {
         if (id) {
-          await api('PUT', `/api/crm/tables/${id}`, { table_number: num, capacity: cap, location: loc });
+          await api('PUT',  `/api/crm/tables/${id}`, { table_number: num, capacity: cap, location: loc });
           showToast('Table updated.', 'success');
         } else {
-          await api('POST', '/api/crm/tables', { table_number: num, capacity: cap, location: loc });
+          await api('POST', '/api/crm/tables',       { table_number: num, capacity: cap, location: loc });
           showToast('Table added.', 'success');
         }
         closeModal('modal-table');
         setTimeout(() => location.reload(), 700);
       } catch (e) { showToast(e.message, 'error'); }
     }
+
     // DELETE /api/crm/tables/{id} → api_delete_table()
     async function deleteTable(id) {
       if (!confirm('Delete this table? This cannot be undone.')) return;
@@ -1024,18 +979,27 @@
       } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // ── GUESTS ────────────────────────────────────────────────────────────────
-    function editGuest(id, name, phone, email, notes) {
-      document.getElementById('guest-edit-id').value  = id;
-      document.getElementById('guest-name').value     = name;
-      document.getElementById('guest-phone').value    = phone;
-      document.getElementById('guest-email').value    = email;
-      document.getElementById('guest-notes').value    = notes;
-      document.getElementById('guest-modal-title').textContent = 'Edit Guest';
-      openModal('modal-guest', true);
+    // ── GUESTS ────────────────────────────────────────────────────────────
+    function openGuestModal(isEdit, id, name, phone, email, notes) {
+      if (!isEdit) {
+        document.getElementById('guest-edit-id').value = '';
+        document.getElementById('guest-modal-title').textContent = 'Add Guest';
+        ['guest-name','guest-phone','guest-email','guest-notes'].forEach(i =>
+          document.getElementById(i).value = ''
+        );
+      } else {
+        document.getElementById('guest-edit-id').value  = id;
+        document.getElementById('guest-modal-title').textContent = 'Edit Guest';
+        document.getElementById('guest-name').value     = name;
+        document.getElementById('guest-phone').value    = phone;
+        document.getElementById('guest-email').value    = email;
+        document.getElementById('guest-notes').value    = notes;
+      }
+      openModal('modal-guest');
     }
-    // PUT /api/crm/guests/{id}  body: GuestIn  → api_update_guest()
-    // POST /api/crm/guests      body: GuestIn  → api_create_guest()
+
+    // POST /api/crm/guests → api_create_guest()
+    // PUT  /api/crm/guests/{id} → api_update_guest()
     async function saveGuest() {
       const id    = document.getElementById('guest-edit-id').value;
       const name  = document.getElementById('guest-name').value.trim();
@@ -1045,16 +1009,17 @@
       if (!name) return showToast('Guest name required.', 'error');
       try {
         if (id) {
-          await api('PUT', `/api/crm/guests/${id}`, { name, phone, email, notes });
+          await api('PUT',  `/api/crm/guests/${id}`, { name, phone, email, notes });
           showToast('Guest updated.', 'success');
         } else {
-          await api('POST', '/api/crm/guests', { name, phone, email, notes });
+          await api('POST', '/api/crm/guests',       { name, phone, email, notes });
           showToast('Guest added.', 'success');
         }
         closeModal('modal-guest');
         setTimeout(() => location.reload(), 700);
       } catch (e) { showToast(e.message, 'error'); }
     }
+
     // DELETE /api/crm/guests/{id} → api_delete_guest()
     async function deleteGuest(id) {
       if (!confirm('Delete this guest?')) return;
@@ -1065,9 +1030,10 @@
       } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // ── RESERVATIONS ──────────────────────────────────────────────────────────
-    // POST /api/crm/reservations  body: ReservationIn → api_create_reservation()
-    // ReservationIn fields: guest_id, table_id, party_size, date, time_slot, notes
+    // ── RESERVATIONS ──────────────────────────────────────────────────────
+    // POST /api/crm/reservations → api_create_reservation()
+    // Checks _check_reservation_limit() — 403 if at limit
+    // Body: ReservationIn { guest_id, table_id, date, time_slot, party_size, notes }
     async function saveReservation() {
       const guest_id   = document.getElementById('res-guest').value;
       const table_id   = document.getElementById('res-table').value;
@@ -1084,6 +1050,7 @@
         setTimeout(() => location.reload(), 700);
       } catch (e) { showToast(e.message, 'error'); }
     }
+
     // PATCH /api/crm/reservations/{id}/cancel → api_cancel_reservation()
     async function cancelRes(id) {
       if (!confirm('Cancel this reservation?')) return;
@@ -1094,41 +1061,12 @@
       } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // ── Modals ────────────────────────────────────────────────────────────────
-    // isEdit=true: called from an edit button — don't reset fields
-    // isEdit=false: called from "Add" button — reset to blank
-    function openModal(id, isEdit) {
-      if (!isEdit) {
-        if (id === 'modal-table') {
-          document.getElementById('table-edit-id').value = '';
-          document.getElementById('table-modal-title').textContent = 'Add Table';
-          document.getElementById('table-number').value   = '';
-          document.getElementById('table-capacity').value = '';
-          document.getElementById('table-location').value = 'main';
-        }
-        if (id === 'modal-guest') {
-          document.getElementById('guest-edit-id').value = '';
-          document.getElementById('guest-modal-title').textContent = 'Add Guest';
-          ['guest-name','guest-phone','guest-email','guest-notes'].forEach(i =>
-            document.getElementById(i).value = ''
-          );
-        }
-      }
-      document.getElementById(id).classList.add('open');
-    }
-    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-    document.querySelectorAll('.modal-overlay').forEach(overlay => {
-      overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); });
-    });
-
-    // ── Init ─────────────────────────────────────────────────────────────────
-    // Set today as default for all date inputs (crm_page does not pass `today`)
-    document.getElementById('slots-date').value  = TODAY;
-    document.getElementById('bulk-date').value   = TODAY;
+    // ── Init ─────────────────────────────────────────────────────────────
+    // crm_page() does not pass `today` — set all date inputs via JS
+    document.getElementById('slots-date').value = TODAY;
+    document.getElementById('bulk-date').value  = TODAY;
     updateBulkPreview();
-
-    // Auto-load slots for today on page load so the Time Slots tab is
-    // immediately populated when the user clicks it (fixes "hidden after refresh")
+    // Pre-load slots for today so the tab is ready immediately
     loadSlots(TODAY);
   </script>
 </body>
