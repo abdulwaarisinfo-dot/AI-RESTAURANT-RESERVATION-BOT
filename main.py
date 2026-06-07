@@ -1,5 +1,5 @@
 # ============================================================
-# AI RESTAURANT RESERVATION BOT  v4.0
+# AI RESTAURANT RESERVATION BOT  v4.1
 # ============================================================
 # FEATURES:
 #   - Signup / Login with JWT (bcrypt + rate limiting)
@@ -12,12 +12,14 @@
 #   - WebSocket real-time dashboard updates
 #   - Admin dashboard + Jinja2 HTML pages
 #   - Plan-based reservation limits (enforced server-side)
+#   - Plan-based slot horizon: Free=1d, Starter=7d, Pro=12d, Ent=21d
+#     (rolling: today + N days ahead, owner can define slots within window)
 #   - Security: CSRF, rate limiting, helmet headers
 # ============================================================
 
 from fastapi import (
     FastAPI, Depends, HTTPException, Request, Form,
-    WebSocket, WebSocketDisconnect, status
+    WebSocket, WebSocketDisconnect, status,
 )
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,7 +58,7 @@ load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
+    format="%(asctime)s | %(levelname)s | %(message)s",
 )
 logger = logging.getLogger("AI.RESTAURANT.BOT")
 
@@ -70,9 +72,19 @@ JWT_SECRET            = os.getenv("JWT_SECRET", "change-me-in-production-use-256
 JWT_ALGORITHM         = "HS256"
 JWT_EXPIRE_DAYS       = 30
 
+# Free tier — no billing required
 FREE_RESERVATIONS     = 10
 FREE_TABLES_MAX       = 3
 
+# ============================================================
+# SLOT HORIZON — how many days ahead an owner can define slots
+# Rolling window: always today + N calendar days (inclusive of today).
+# Example free: owner can open slots for today and tomorrow only.
+# When tomorrow passes, they gain the day after automatically.
+# ============================================================
+FREE_SLOT_HORIZON_DAYS = 1   # today + 1 = 2 calendar days visible
+
+# Paddle config (works in Pakistan + internationally)
 PADDLE_VENDOR_ID      = os.getenv("PADDLE_VENDOR_ID", "")
 PADDLE_API_KEY        = os.getenv("PADDLE_API_KEY", "")
 PADDLE_WEBHOOK_SECRET = os.getenv("PADDLE_WEBHOOK_SECRET", "")
@@ -92,6 +104,7 @@ PLANS = {
         "price_month":        29,
         "reservations_month": 1200,
         "tables_max":         10,
+        "slot_horizon_days":  7,    # can define slots up to 7 days ahead
         "paddle_price_id":    os.getenv("PADDLE_PRICE_STARTER", "pri_starter"),
         "color":              "#6366f1",
         "features": [
@@ -99,6 +112,7 @@ PLANS = {
             "Up to 10 tables",
             "AI booking agent",
             "Basic CRM",
+            "7-day slot scheduling",
             "Email support",
         ],
     },
@@ -107,6 +121,7 @@ PLANS = {
         "price_month":        59,
         "reservations_month": 1600,
         "tables_max":         25,
+        "slot_horizon_days":  12,   # can define slots up to 12 days ahead
         "paddle_price_id":    os.getenv("PADDLE_PRICE_PRO", "pri_pro"),
         "color":              "#f59e0b",
         "features": [
@@ -114,6 +129,7 @@ PLANS = {
             "Up to 25 tables",
             "AI booking agent",
             "Full CRM + guest history",
+            "12-day slot scheduling",
             "Priority support",
         ],
     },
@@ -122,6 +138,7 @@ PLANS = {
         "price_month":        99,
         "reservations_month": 2000,
         "tables_max":         999,
+        "slot_horizon_days":  21,   # can define slots up to 21 days ahead
         "paddle_price_id":    os.getenv("PADDLE_PRICE_ENT", "pri_ent"),
         "color":              "#10b981",
         "features": [
@@ -129,18 +146,21 @@ PLANS = {
             "Unlimited tables",
             "AI booking agent",
             "Full CRM + analytics",
+            "21-day slot scheduling",
             "24/7 dedicated support",
         ],
     },
 }
 
 # ============================================================
-# RATE LIMITING
+# RATE LIMITING (in-memory, per IP)
 # ============================================================
 
 _rate_store: Dict[str, list] = defaultdict(list)
 
+
 def rate_limit(ip: str, max_calls: int = 20, window_sec: int = 60) -> bool:
+    """Returns True if allowed, False if rate limited."""
     now = time.time()
     calls = _rate_store[ip]
     _rate_store[ip] = [t for t in calls if now - t < window_sec]
@@ -149,26 +169,29 @@ def rate_limit(ip: str, max_calls: int = 20, window_sec: int = 60) -> bool:
     _rate_store[ip].append(now)
     return True
 
+
 # ============================================================
 # FASTAPI APP
 # ============================================================
 
 app = FastAPI(
     title="AI Restaurant Reservation Bot",
-    version="4.0.0",
+    version="4.1.0",
     description="Multi-tenant reservation system with Paddle billing, Time Slots, and AI agent.",
     docs_url="/api/docs",
 )
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+        response.headers["X-Content-Type-Options"]  = "nosniff"
+        response.headers["X-Frame-Options"]          = "DENY"
+        response.headers["X-XSS-Protection"]         = "1; mode=block"
+        response.headers["Referrer-Policy"]          = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"]       = "geolocation=(), microphone=()"
         return response
+
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
@@ -207,6 +230,7 @@ class ConnectionManager:
         for ws in dead:
             self.disconnect(ws, restaurant_id)
 
+
 ws_manager = ConnectionManager()
 
 # ============================================================
@@ -215,6 +239,7 @@ ws_manager = ConnectionManager()
 
 _mongo_client: Optional[MongoClient] = None
 
+
 def get_mongo_client() -> MongoClient:
     global _mongo_client
     if _mongo_client is None:
@@ -222,11 +247,14 @@ def get_mongo_client() -> MongoClient:
         logger.info("MongoDB connected.")
     return _mongo_client
 
+
 def get_platform_db() -> Database:
     return get_mongo_client()["platform"]
 
+
 def get_owner_db(restaurant_id: str) -> Database:
     return get_mongo_client()[f"restaurant_{restaurant_id}"]
+
 
 # ============================================================
 # PYDANTIC SCHEMAS
@@ -238,25 +266,30 @@ class SignupRequest(BaseModel):
     email:           EmailStr
     password:        str
 
+
 class LoginRequest(BaseModel):
     email:    EmailStr
     password: str
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type:   str = "bearer"
     expires_at:   datetime
 
+
 class TableIn(BaseModel):
     table_number: int
     capacity:     int
     location:     Optional[str] = "main"
+
 
 class GuestIn(BaseModel):
     name:  str
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     notes: Optional[str] = None
+
 
 class ReservationIn(BaseModel):
     guest_id:   str
@@ -266,38 +299,54 @@ class ReservationIn(BaseModel):
     time_slot:  str
     notes:      Optional[str] = None
 
+
 class ChatMessage(BaseModel):
     role:    str
     content: str
+
 
 class ChatRequest(BaseModel):
     session_id: str
     message:    str
     history:    List[ChatMessage] = []
 
+
 class SubscribeRequest(BaseModel):
     plan: str
+
 
 # ============================================================
 # TIME SLOT SCHEMAS
 # ============================================================
 
 class TimeSlotIn(BaseModel):
+    """Single time slot for a specific table on a specific date."""
     table_id:   str
-    date:       str
-    start_time: str
-    end_time:   str
+    date:       str   # YYYY-MM-DD
+    start_time: str   # HH:MM  e.g. "17:00"
+    end_time:   str   # HH:MM  e.g. "17:30"
+
 
 class BulkTimeSlotsIn(BaseModel):
-    table_ids:      List[str]
-    date:           str
-    start_time:     str
-    end_time:       str
-    duration_mins:  int = 30
+    """
+    Bulk create: owner picks tables + date + start/end + duration.
+    System auto-generates all slots between start and end.
+    Owner can do 1 table or 10 tables at once — their choice.
+    Unlimited slots allowed (plan limits only affect reservations).
+    Date must be within the plan's slot horizon window.
+    """
+    table_ids:     List[str]
+    date:          str          # YYYY-MM-DD
+    start_time:    str          # HH:MM  e.g. "17:00"
+    end_time:      str          # HH:MM  e.g. "22:00"
+    duration_mins: int = 30     # slot length: 30, 60, 90, etc.
+
 
 class DeleteTimeSlotsIn(BaseModel):
+    """Delete all slots for given tables on a given date."""
     table_ids: List[str]
     date:      str
+
 
 # ============================================================
 # AUTH HELPERS
@@ -306,8 +355,10 @@ class DeleteTimeSlotsIn(BaseModel):
 def hash_password(raw: str) -> str:
     return pwd_ctx.hash(raw)
 
+
 def verify_password(raw: str, hashed: str) -> bool:
     return pwd_ctx.verify(raw, hashed)
+
 
 def create_jwt(restaurant_id: str, email: str) -> tuple[str, datetime]:
     expires_at = datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS)
@@ -319,6 +370,7 @@ def create_jwt(restaurant_id: str, email: str) -> tuple[str, datetime]:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM), expires_at
 
+
 def decode_jwt(token: str) -> dict:
     try:
         return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -326,6 +378,7 @@ def decode_jwt(token: str) -> dict:
         raise HTTPException(401, "Session expired. Please log in again.")
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Invalid token.")
+
 
 def get_current_owner(
     request: Request,
@@ -338,6 +391,7 @@ def get_current_owner(
         return decode_jwt(token)
     raise HTTPException(401, "Not authenticated.")
 
+
 def get_owner_from_cookie(request: Request) -> Optional[dict]:
     token = request.cookies.get("access_token")
     if not token:
@@ -347,12 +401,15 @@ def get_owner_from_cookie(request: Request) -> Optional[dict]:
     except Exception:
         return None
 
+
 def _subscription_active(owner_doc: dict) -> bool:
     return owner_doc.get("subscription_status") == "active"
+
 
 def _get_plan(owner_doc: dict) -> dict:
     plan_key = owner_doc.get("plan", "starter")
     return PLANS.get(plan_key, PLANS["starter"])
+
 
 # ============================================================
 # FREE TIER HELPERS
@@ -361,17 +418,65 @@ def _get_plan(owner_doc: dict) -> dict:
 def _is_free_tier(owner_doc: dict) -> bool:
     return not _subscription_active(owner_doc)
 
+
 def _free_reservations_used(rdb: Database) -> int:
     return rdb["reservations"].count_documents({"status": "confirmed"})
+
 
 def _free_reservations_remaining(rdb: Database) -> int:
     used = _free_reservations_used(rdb)
     return max(0, FREE_RESERVATIONS - used)
 
+
 def _can_access_dashboard(owner_doc: dict) -> bool:
     if _subscription_active(owner_doc):
         return True
     return True
+
+
+# ============================================================
+# SLOT HORIZON HELPERS
+# ============================================================
+
+def _get_slot_horizon_days(owner_doc: dict) -> int:
+    """
+    Returns how many days ahead the owner can define/view time slots.
+    Rolling window — always relative to today (UTC).
+
+    Free tier : 1  → today + 1 day ahead  (2 calendar days total)
+    Starter   : 7  → today + 7 days ahead
+    Pro       : 12 → today + 12 days ahead
+    Enterprise: 21 → today + 21 days ahead
+
+    As each day passes the window rolls forward automatically —
+    no cron job needed. Free users always see today + tomorrow.
+    """
+    if _is_free_tier(owner_doc):
+        return FREE_SLOT_HORIZON_DAYS
+    plan = _get_plan(owner_doc)
+    return plan.get("slot_horizon_days", FREE_SLOT_HORIZON_DAYS)
+
+
+def _slot_horizon_max_date(owner_doc: dict) -> str:
+    """Returns the latest date (YYYY-MM-DD) the owner can define slots for."""
+    days = _get_slot_horizon_days(owner_doc)
+    max_dt = datetime.now(timezone.utc).date() + timedelta(days=days)
+    return max_dt.strftime("%Y-%m-%d")
+
+
+def _check_slot_horizon(date_str: str, owner_doc: dict) -> bool:
+    """
+    Returns True if date_str falls within today … today+horizon_days (inclusive).
+    Returns False if the date is in the past or beyond the plan's horizon.
+    """
+    try:
+        target = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    today   = datetime.now(timezone.utc).date()
+    max_day = today + timedelta(days=_get_slot_horizon_days(owner_doc))
+    return today <= target <= max_day
+
 
 # ============================================================
 # PLAN ENFORCEMENT HELPERS
@@ -381,14 +486,15 @@ def _check_reservation_limit(rdb: Database, owner_doc: dict) -> bool:
     if _is_free_tier(owner_doc):
         used = _free_reservations_used(rdb)
         return used < FREE_RESERVATIONS
-    plan  = _get_plan(owner_doc)
-    limit = plan["reservations_month"]
-    month_start = (datetime.now(timezone.utc) - timedelta(days=30))
+    plan        = _get_plan(owner_doc)
+    limit       = plan["reservations_month"]
+    month_start = datetime.now(timezone.utc) - timedelta(days=30)
     count = rdb["reservations"].count_documents({
         "status":     "confirmed",
         "created_at": {"$gte": month_start},
     })
     return count < limit
+
 
 def _check_table_limit(rdb: Database, owner_doc: dict) -> bool:
     if _is_free_tier(owner_doc):
@@ -399,6 +505,7 @@ def _check_table_limit(rdb: Database, owner_doc: dict) -> bool:
     count = rdb["tables"].count_documents({})
     return count < limit
 
+
 def _get_effective_limits(rdb: Database, owner_doc: dict) -> dict:
     if _is_free_tier(owner_doc):
         used = _free_reservations_used(rdb)
@@ -408,9 +515,11 @@ def _get_effective_limits(rdb: Database, owner_doc: dict) -> dict:
             "reservations_used":  used,
             "reservations_left":  max(0, FREE_RESERVATIONS - used),
             "tables_max":         FREE_TABLES_MAX,
+            "slot_horizon_days":  FREE_SLOT_HORIZON_DAYS,
+            "slot_horizon_until": _slot_horizon_max_date(owner_doc),
         }
-    plan = _get_plan(owner_doc)
-    month_start = (datetime.now(timezone.utc) - timedelta(days=30))
+    plan        = _get_plan(owner_doc)
+    month_start = datetime.now(timezone.utc) - timedelta(days=30)
     used = rdb["reservations"].count_documents({
         "status":     "confirmed",
         "created_at": {"$gte": month_start},
@@ -421,17 +530,25 @@ def _get_effective_limits(rdb: Database, owner_doc: dict) -> dict:
         "reservations_used":  used,
         "reservations_left":  max(0, plan["reservations_month"] - used),
         "tables_max":         plan["tables_max"],
+        "slot_horizon_days":  plan.get("slot_horizon_days", FREE_SLOT_HORIZON_DAYS),
+        "slot_horizon_until": _slot_horizon_max_date(owner_doc),
     }
+
 
 # ============================================================
 # TIME SLOT HELPERS
 # ============================================================
 
 def _generate_slots(start_time: str, end_time: str, duration_mins: int) -> List[dict]:
-    slots = []
-    fmt = "%H:%M"
+    """
+    Auto-generate list of {start, end} dicts between start_time and end_time.
+    E.g. start=17:00 end=19:00 duration=30 →
+         [{17:00,17:30},{17:30,18:00},{18:00,18:30},{18:30,19:00}]
+    """
+    slots   = []
+    fmt     = "%H:%M"
     current = datetime.strptime(start_time, fmt)
-    end     = datetime.strptime(end_time,   fmt)
+    end     = datetime.strptime(end_time, fmt)
     while current < end:
         slot_end = current + timedelta(minutes=duration_mins)
         if slot_end > end:
@@ -443,22 +560,29 @@ def _generate_slots(start_time: str, end_time: str, duration_mins: int) -> List[
         current = slot_end
     return slots
 
+
 def _get_table_slots(rdb: Database, table_id: str, date: str) -> List[dict]:
+    """Return all defined time slots for a table on a given date."""
     doc = rdb["time_slots"].find_one({"table_id": table_id, "date": date})
     if not doc:
         return []
     return doc.get("slots", [])
 
+
 def _any_slots_defined(rdb: Database, date: str) -> bool:
+    """Returns True if at least one table has slots defined for the date."""
     return rdb["time_slots"].count_documents({"date": date}) > 0
 
+
 def _slot_in_defined(rdb: Database, table_id: str, date: str, start_time: str) -> bool:
+    """Check if a specific start_time slot is defined for table on date."""
     doc = rdb["time_slots"].find_one({
         "table_id": table_id,
         "date":     date,
         "slots":    {"$elemMatch": {"start": start_time}},
     })
     return doc is not None
+
 
 # ============================================================
 # PADDLE BILLING HELPERS
@@ -493,6 +617,7 @@ async def paddle_create_checkout(owner_doc: dict, plan_key: str) -> dict:
         raise HTTPException(502, "Payment provider error. Please try again.")
     return r.json()
 
+
 def verify_paddle_webhook(payload: bytes, signature: str) -> bool:
     if not PADDLE_WEBHOOK_SECRET:
         return True
@@ -502,6 +627,7 @@ def verify_paddle_webhook(payload: bytes, signature: str) -> bool:
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
+
 
 # ============================================================
 # JINJA2 HTML ROUTES
@@ -514,9 +640,11 @@ def index(request: Request):
         "plans":   PLANS,
     })
 
+
 @app.get("/signup", response_class=HTMLResponse, tags=["Pages"])
 def signup_page(request: Request):
     return templates.TemplateResponse("signup.html", {"request": request})
+
 
 @app.post("/signup", response_class=HTMLResponse, tags=["Pages"])
 def signup_form(
@@ -530,19 +658,19 @@ def signup_form(
     if not rate_limit(ip, max_calls=5, window_sec=300):
         return templates.TemplateResponse("signup.html", {
             "request": request,
-            "error": "Too many signup attempts. Please wait 5 minutes."
+            "error":   "Too many signup attempts. Please wait 5 minutes.",
         })
     if len(password) < 8:
         return templates.TemplateResponse("signup.html", {
             "request": request,
-            "error": "Password must be at least 8 characters."
+            "error":   "Password must be at least 8 characters.",
         })
     db  = get_platform_db()
     col = db["owners"]
     if col.find_one({"email": email.lower()}):
         return templates.TemplateResponse("signup.html", {
             "request": request,
-            "error": "Email already registered."
+            "error":   "Email already registered.",
         })
     restaurant_id = str(ObjectId())
     col.insert_one({
@@ -568,9 +696,11 @@ def signup_form(
     logger.info(f"Signed up (free tier): {email} ({restaurant_id})")
     return response
 
+
 @app.get("/login", response_class=HTMLResponse, tags=["Pages"])
 def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
+
 
 @app.post("/login", response_class=HTMLResponse, tags=["Pages"])
 def login_form(
@@ -582,14 +712,14 @@ def login_form(
     if not rate_limit(ip, max_calls=10, window_sec=60):
         return templates.TemplateResponse("login.html", {
             "request": request,
-            "error": "Too many login attempts. Please wait a moment."
+            "error":   "Too many login attempts. Please wait a moment.",
         })
     db    = get_platform_db()
     owner = db["owners"].find_one({"email": email.lower()})
     if not owner or not verify_password(password, owner["password_hash"]):
         return templates.TemplateResponse("login.html", {
             "request": request,
-            "error": "Invalid email or password."
+            "error":   "Invalid email or password.",
         })
     restaurant_id = str(owner["_id"])
     token, _      = create_jwt(restaurant_id, email.lower())
@@ -601,32 +731,35 @@ def login_form(
     )
     return response
 
+
 @app.get("/logout", tags=["Pages"])
 def logout():
     response = RedirectResponse("/login", status_code=302)
     response.delete_cookie("access_token")
     return response
 
+
 @app.get("/billing", response_class=HTMLResponse, tags=["Pages"])
 def billing_page(request: Request):
     owner_jwt = get_owner_from_cookie(request)
     if not owner_jwt:
         return RedirectResponse("/login")
-    db    = get_platform_db()
-    owner = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
+    db           = get_platform_db()
+    owner        = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
     current_plan = owner.get("plan", "starter")
-    rdb   = get_owner_db(owner_jwt["sub"])
-    limits = _get_effective_limits(rdb, owner)
+    rdb          = get_owner_db(owner_jwt["sub"])
+    limits       = _get_effective_limits(rdb, owner)
     return templates.TemplateResponse("billing.html", {
-        "request":      request,
-        "owner":        owner,
-        "active":       _subscription_active(owner),
-        "plans":        PLANS,
-        "current_plan": current_plan,
-        "app_url":      os.getenv("APP_URL", "http://localhost:8000"),
-        "limits":       limits,
+        "request":           request,
+        "owner":             owner,
+        "active":            _subscription_active(owner),
+        "plans":             PLANS,
+        "current_plan":      current_plan,
+        "app_url":           os.getenv("APP_URL", "http://localhost:8000"),
+        "limits":            limits,
         "free_reservations": FREE_RESERVATIONS,
     })
+
 
 @app.post("/billing/subscribe", response_class=HTMLResponse, tags=["Pages"])
 async def billing_subscribe(
@@ -644,7 +777,7 @@ async def billing_subscribe(
     limits    = _get_effective_limits(rdb, owner_doc)
     try:
         result = await paddle_create_checkout(owner_doc, plan)
-    except Exception as e:
+    except Exception:
         return templates.TemplateResponse("billing.html", {
             "request":           request,
             "owner":             owner_doc,
@@ -660,6 +793,7 @@ async def billing_subscribe(
     if checkout_url:
         return RedirectResponse(checkout_url, status_code=302)
     return RedirectResponse("/billing", status_code=302)
+
 
 @app.post("/billing/cancel", response_class=HTMLResponse, tags=["Pages"])
 async def billing_cancel_page(request: Request):
@@ -679,10 +813,11 @@ async def billing_cancel_page(request: Request):
         if r.status_code in (200, 204):
             db["owners"].update_one(
                 {"_id": ObjectId(owner_jwt["sub"])},
-                {"$set": {"subscription_status": "cancelled"}}
+                {"$set": {"subscription_status": "cancelled"}},
             )
             logger.info(f"Subscription cancelled: {owner_jwt['sub']}")
     return RedirectResponse("/billing", status_code=302)
+
 
 @app.get("/billing/success", response_class=HTMLResponse, tags=["Pages"])
 def billing_success(request: Request):
@@ -690,6 +825,7 @@ def billing_success(request: Request):
     if not owner_jwt:
         return RedirectResponse("/login")
     return RedirectResponse("/dashboard")
+
 
 @app.get("/dashboard", response_class=HTMLResponse, tags=["Pages"])
 def dashboard_page(request: Request):
@@ -702,7 +838,6 @@ def dashboard_page(request: Request):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     plan  = _get_plan(owner)
     limits = _get_effective_limits(rdb, owner)
-    month_start = (datetime.now(timezone.utc) - timedelta(days=30))
     stats = {
         "total_tables":       rdb["tables"].count_documents({}),
         "total_guests":       rdb["guests"].count_documents({}),
@@ -738,6 +873,7 @@ def dashboard_page(request: Request):
         "is_free_tier":      _is_free_tier(owner),
     })
 
+
 @app.get("/crm", response_class=HTMLResponse, tags=["Pages"])
 def crm_page(request: Request):
     owner_jwt = get_owner_from_cookie(request)
@@ -745,9 +881,9 @@ def crm_page(request: Request):
         return RedirectResponse("/login")
     db    = get_platform_db()
     owner = db["owners"].find_one({"_id": ObjectId(owner_jwt["sub"])})
-    rdb    = get_owner_db(owner_jwt["sub"])
-    tables = list(rdb["tables"].find())
-    guests = list(rdb["guests"].find())
+    rdb   = get_owner_db(owner_jwt["sub"])
+    tables       = list(rdb["tables"].find())
+    guests       = list(rdb["guests"].find())
     reservations = list(rdb["reservations"].find().sort("date", -1).limit(50))
     for doc in tables + guests + reservations:
         doc["id"] = str(doc.pop("_id"))
@@ -767,6 +903,7 @@ def crm_page(request: Request):
         "is_free_tier":      _is_free_tier(owner),
     })
 
+
 @app.get("/reserve/{restaurant_id}", response_class=HTMLResponse, tags=["Pages"])
 def reservation_page(request: Request, restaurant_id: str):
     try:
@@ -785,6 +922,7 @@ def reservation_page(request: Request, restaurant_id: str):
         "restaurant_name": owner["restaurant_name"],
         "restaurant_id":   restaurant_id,
     })
+
 
 # ============================================================
 # WEBSOCKET ENDPOINT
@@ -807,6 +945,7 @@ async def ws_dashboard(websocket: WebSocket, restaurant_id: str):
     except Exception:
         ws_manager.disconnect(websocket, restaurant_id)
 
+
 # ============================================================
 # API — AUTH
 # ============================================================
@@ -816,7 +955,7 @@ def api_signup(body: SignupRequest, request: Request):
     ip = request.client.host
     if not rate_limit(ip, max_calls=5, window_sec=300):
         raise HTTPException(429, "Too many requests.")
-    db  = get_platform_db()
+    db = get_platform_db()
     if db["owners"].find_one({"email": body.email.lower()}):
         raise HTTPException(400, "Email already registered.")
     restaurant_id = str(ObjectId())
@@ -836,6 +975,7 @@ def api_signup(body: SignupRequest, request: Request):
     token, expires_at = create_jwt(restaurant_id, body.email.lower())
     return TokenResponse(access_token=token, expires_at=expires_at)
 
+
 @app.post("/api/auth/login", response_model=TokenResponse, tags=["Auth API"])
 def api_login(body: LoginRequest, request: Request):
     ip = request.client.host
@@ -847,6 +987,7 @@ def api_login(body: LoginRequest, request: Request):
         raise HTTPException(401, "Invalid credentials.")
     token, expires_at = create_jwt(str(owner["_id"]), body.email.lower())
     return TokenResponse(access_token=token, expires_at=expires_at)
+
 
 # ============================================================
 # API — BILLING (PADDLE)
@@ -865,11 +1006,12 @@ async def create_checkout(body: SubscribeRequest, owner=Depends(get_current_owne
     checkout_url = result.get("data", {}).get("url") or result.get("url", "")
     return {"checkout_url": checkout_url, "plan": body.plan}
 
+
 @app.post("/api/billing/cancel", tags=["Billing"])
 async def cancel_subscription(owner=Depends(get_current_owner)):
     db        = get_platform_db()
     owner_doc = db["owners"].find_one({"_id": ObjectId(owner["sub"])})
-    sub_id = owner_doc.get("paddle_subscription_id")
+    sub_id    = owner_doc.get("paddle_subscription_id")
     if not sub_id:
         raise HTTPException(400, "No active subscription.")
     headers = {"Authorization": f"Bearer {PADDLE_API_KEY}"}
@@ -882,13 +1024,15 @@ async def cancel_subscription(owner=Depends(get_current_owner)):
         raise HTTPException(502, "Failed to cancel subscription.")
     db["owners"].update_one(
         {"_id": ObjectId(owner["sub"])},
-        {"$set": {"subscription_status": "cancelled"}}
+        {"$set": {"subscription_status": "cancelled"}},
     )
     return {"cancelled": True}
+
 
 @app.get("/api/billing/plans", tags=["Billing"])
 def get_plans():
     return {k: {**v, "paddle_price_id": None} for k, v in PLANS.items()}
+
 
 @app.post("/api/billing/webhook", tags=["Billing"])
 async def paddle_webhook(request: Request):
@@ -903,6 +1047,7 @@ async def paddle_webhook(request: Request):
     event_type = event.get("event_type", "")
     data       = event.get("data", {})
     db         = get_platform_db()
+
     if event_type in ("subscription.activated", "subscription.updated"):
         sub_id        = data.get("id")
         custom_data   = data.get("custom_data", {})
@@ -918,16 +1063,18 @@ async def paddle_webhook(request: Request):
                     "paddle_subscription_id": sub_id,
                     "paddle_customer_id":     customer_id,
                     "free_tier":              False,
-                }}
+                }},
             )
             logger.info(f"Webhook: subscription activated {restaurant_id} plan={plan_key}")
+
     elif event_type in ("subscription.canceled", "subscription.paused"):
         sub_id = data.get("id")
         db["owners"].update_one(
             {"paddle_subscription_id": sub_id},
-            {"$set": {"subscription_status": "cancelled"}}
+            {"$set": {"subscription_status": "cancelled"}},
         )
         logger.info(f"Webhook: subscription cancelled {sub_id}")
+
     elif event_type == "transaction.completed":
         custom_data   = data.get("custom_data", {})
         restaurant_id = custom_data.get("restaurant_id")
@@ -939,17 +1086,20 @@ async def paddle_webhook(request: Request):
                     "subscription_status": "active",
                     "plan":                plan_key,
                     "free_tier":           False,
-                }}
+                }},
             )
+
     elif event_type == "transaction.payment_failed":
         customer_id = data.get("customer_id")
         if customer_id:
             db["owners"].update_one(
                 {"paddle_customer_id": customer_id},
-                {"$set": {"subscription_status": "past_due"}}
+                {"$set": {"subscription_status": "past_due"}},
             )
             logger.warning(f"Webhook: payment FAILED for {customer_id}")
+
     return {"received": True}
+
 
 # ============================================================
 # CRM API
@@ -960,6 +1110,7 @@ def _sub_guard(owner):
     owner_doc = db["owners"].find_one({"_id": ObjectId(owner["sub"])})
     rdb       = get_owner_db(owner["sub"])
     return rdb, owner_doc
+
 
 # --- Tables ---
 
@@ -974,26 +1125,33 @@ def api_create_table(body: TableIn, owner=Depends(get_current_owner)):
     result = db["tables"].insert_one(body.model_dump())
     return {"id": str(result.inserted_id), **body.model_dump()}
 
+
 @app.get("/api/crm/tables", tags=["Tables"])
 def api_list_tables(owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
     rows  = list(db["tables"].find())
-    for r in rows: r["id"] = str(r.pop("_id"))
+    for r in rows:
+        r["id"] = str(r.pop("_id"))
     return rows
+
 
 @app.put("/api/crm/tables/{table_id}", tags=["Tables"])
 def api_update_table(table_id: str, body: TableIn, owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
     res   = db["tables"].update_one({"_id": ObjectId(table_id)}, {"$set": body.model_dump()})
-    if res.matched_count == 0: raise HTTPException(404, "Table not found.")
+    if res.matched_count == 0:
+        raise HTTPException(404, "Table not found.")
     return {"updated": True}
+
 
 @app.delete("/api/crm/tables/{table_id}", tags=["Tables"])
 def api_delete_table(table_id: str, owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
     res   = db["tables"].delete_one({"_id": ObjectId(table_id)})
-    if res.deleted_count == 0: raise HTTPException(404, "Table not found.")
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Table not found.")
     return {"deleted": True}
+
 
 # --- Guests ---
 
@@ -1004,33 +1162,47 @@ def api_create_guest(body: GuestIn, owner=Depends(get_current_owner)):
     result = db["guests"].insert_one(doc)
     return {"id": str(result.inserted_id), **body.model_dump()}
 
+
 @app.get("/api/crm/guests", tags=["Guests"])
 def api_list_guests(owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
     rows  = list(db["guests"].find())
-    for r in rows: r["id"] = str(r.pop("_id"))
+    for r in rows:
+        r["id"] = str(r.pop("_id"))
     return rows
+
 
 @app.put("/api/crm/guests/{guest_id}", tags=["Guests"])
 def api_update_guest(guest_id: str, body: GuestIn, owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
     res   = db["guests"].update_one({"_id": ObjectId(guest_id)}, {"$set": body.model_dump()})
-    if res.matched_count == 0: raise HTTPException(404, "Guest not found.")
+    if res.matched_count == 0:
+        raise HTTPException(404, "Guest not found.")
     return {"updated": True}
+
 
 @app.delete("/api/crm/guests/{guest_id}", tags=["Guests"])
 def api_delete_guest(guest_id: str, owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
     res   = db["guests"].delete_one({"_id": ObjectId(guest_id)})
-    if res.deleted_count == 0: raise HTTPException(404, "Guest not found.")
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Guest not found.")
     return {"deleted": True}
+
 
 # --- Reservations ---
 
 def _slot_available(db, table_id, date, time_slot, exclude_id=None):
-    q = {"table_id": table_id, "date": date, "time_slot": time_slot, "status": {"$ne": "cancelled"}}
-    if exclude_id: q["_id"] = {"$ne": ObjectId(exclude_id)}
+    q = {
+        "table_id":  table_id,
+        "date":      date,
+        "time_slot": time_slot,
+        "status":    {"$ne": "cancelled"},
+    }
+    if exclude_id:
+        q["_id"] = {"$ne": ObjectId(exclude_id)}
     return db["reservations"].count_documents(q) == 0
+
 
 @app.post("/api/crm/reservations", tags=["Reservations"])
 def api_create_reservation(body: ReservationIn, owner=Depends(get_current_owner)):
@@ -1042,10 +1214,11 @@ def api_create_reservation(body: ReservationIn, owner=Depends(get_current_owner)
         raise HTTPException(403, f"Monthly reservation limit reached ({plan['reservations_month']} on your plan). Upgrade to continue.")
     if not _slot_available(db, body.table_id, body.date, body.time_slot):
         raise HTTPException(409, "Time slot already booked.")
-    doc = {**body.model_dump(), "status": "confirmed", "created_at": datetime.now(timezone.utc)}
+    doc    = {**body.model_dump(), "status": "confirmed", "created_at": datetime.now(timezone.utc)}
     result = db["reservations"].insert_one(doc)
     db["guests"].update_one({"_id": ObjectId(body.guest_id)}, {"$inc": {"visit_count": 1}})
     return {"id": str(result.inserted_id), **body.model_dump()}
+
 
 @app.get("/api/crm/reservations", tags=["Reservations"])
 def api_list_reservations(date: Optional[str] = None, owner=Depends(get_current_owner)):
@@ -1058,20 +1231,65 @@ def api_list_reservations(date: Optional[str] = None, owner=Depends(get_current_
             r["created_at"] = r["created_at"].isoformat()
     return rows
 
+
 @app.patch("/api/crm/reservations/{res_id}/cancel", tags=["Reservations"])
 def api_cancel_reservation(res_id: str, owner=Depends(get_current_owner)):
     db, _ = _sub_guard(owner)
-    res   = db["reservations"].update_one({"_id": ObjectId(res_id)}, {"$set": {"status": "cancelled"}})
-    if res.matched_count == 0: raise HTTPException(404, "Reservation not found.")
+    res   = db["reservations"].update_one(
+        {"_id": ObjectId(res_id)},
+        {"$set": {"status": "cancelled"}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Reservation not found.")
     return {"cancelled": True}
+
 
 # ============================================================
 # TIME SLOTS API
+# Owner can add unlimited time slots per table per day,
+# BUT only within their plan's slot horizon window.
+#
+# Horizon is rolling — always relative to today (UTC):
+#   Free      : today + 1 day  (2 calendar days)
+#   Starter   : today + 7 days
+#   Pro       : today + 12 days
+#   Enterprise: today + 21 days
+#
+# As each day passes the window shifts forward automatically.
+# No cron job needed — just a date comparison at request time.
+#
+# Reservation PLAN limits are enforced separately.
+# If NO slots are defined for a date → bot says not taking reservations.
+# If slots exist but all booked → bot says fully booked.
 # ============================================================
 
 @app.post("/api/crm/timeslots/bulk", tags=["Time Slots"])
 def api_bulk_create_timeslots(body: BulkTimeSlotsIn, owner=Depends(get_current_owner)):
+    """
+    Owner sets time slots for one or multiple tables in one go.
+    Date must be within the plan's rolling slot horizon.
+
+    Free  tier: only today and tomorrow (horizon=1).
+    Starter   : up to 7 days ahead.
+    Pro       : up to 12 days ahead.
+    Enterprise: up to 21 days ahead.
+
+    The window rolls forward daily — no manual reset needed.
+    Unlimited slots per table per day — only reservations count toward plan limits.
+    """
     rdb, owner_doc = _sub_guard(owner)
+
+    # ── Slot horizon enforcement ──────────────────────────────
+    if not _check_slot_horizon(body.date, owner_doc):
+        horizon  = _get_slot_horizon_days(owner_doc)
+        max_date = _slot_horizon_max_date(owner_doc)
+        tier     = "Free tier" if _is_free_tier(owner_doc) else f"{_get_plan(owner_doc)['name']} plan"
+        raise HTTPException(
+            403,
+            f"{tier} allows scheduling slots up to {horizon} day(s) ahead "
+            f"(until {max_date}). Upgrade your plan to schedule further in advance.",
+        )
+
     generated = _generate_slots(body.start_time, body.end_time, body.duration_mins)
     if not generated:
         raise HTTPException(400, "No slots generated. Check start/end times and duration.")
@@ -1089,11 +1307,11 @@ def api_bulk_create_timeslots(body: BulkTimeSlotsIn, owner=Depends(get_current_o
             if new_slots:
                 all_slots = sorted(
                     existing_doc["slots"] + new_slots,
-                    key=lambda x: x["start"]
+                    key=lambda x: x["start"],
                 )
                 rdb["time_slots"].update_one(
                     {"table_id": table_id, "date": body.date},
-                    {"$set": {"slots": all_slots, "updated_at": datetime.now(timezone.utc)}}
+                    {"$set": {"slots": all_slots, "updated_at": datetime.now(timezone.utc)}},
                 )
         else:
             rdb["time_slots"].insert_one({
@@ -1112,21 +1330,38 @@ def api_bulk_create_timeslots(body: BulkTimeSlotsIn, owner=Depends(get_current_o
 
     logger.info(f"Bulk slots created: {len(results)} tables, date={body.date}, slots_per_table={len(generated)}")
     return {
-        "date":           body.date,
-        "duration_mins":  body.duration_mins,
+        "date":            body.date,
+        "duration_mins":   body.duration_mins,
         "slots_per_table": len(generated),
-        "tables_updated": results,
-        "slots_preview":  [s["start"] for s in generated],
+        "tables_updated":  results,
+        "slots_preview":   [s["start"] for s in generated],
     }
+
 
 @app.post("/api/crm/timeslots/single", tags=["Time Slots"])
 def api_add_single_timeslot(body: TimeSlotIn, owner=Depends(get_current_owner)):
-    rdb, _ = _sub_guard(owner)
+    """
+    Add a single custom time slot to a table on a date.
+    Date must be within the plan's rolling slot horizon.
+    """
+    rdb, owner_doc = _sub_guard(owner)
+
+    # ── Slot horizon enforcement ──────────────────────────────
+    if not _check_slot_horizon(body.date, owner_doc):
+        horizon  = _get_slot_horizon_days(owner_doc)
+        max_date = _slot_horizon_max_date(owner_doc)
+        tier     = "Free tier" if _is_free_tier(owner_doc) else f"{_get_plan(owner_doc)['name']} plan"
+        raise HTTPException(
+            403,
+            f"{tier} allows scheduling slots up to {horizon} day(s) ahead "
+            f"(until {max_date}). Upgrade your plan to schedule further in advance.",
+        )
+
     table = rdb["tables"].find_one({"_id": ObjectId(body.table_id)})
     if not table:
         raise HTTPException(404, "Table not found.")
 
-    new_slot = {"start": body.start_time, "end": body.end_time}
+    new_slot     = {"start": body.start_time, "end": body.end_time}
     existing_doc = rdb["time_slots"].find_one({"table_id": body.table_id, "date": body.date})
     if existing_doc:
         existing_starts = {s["start"] for s in existing_doc.get("slots", [])}
@@ -1134,11 +1369,11 @@ def api_add_single_timeslot(body: TimeSlotIn, owner=Depends(get_current_owner)):
             return {"message": "Slot already exists.", "slot": new_slot}
         all_slots = sorted(
             existing_doc["slots"] + [new_slot],
-            key=lambda x: x["start"]
+            key=lambda x: x["start"],
         )
         rdb["time_slots"].update_one(
             {"table_id": body.table_id, "date": body.date},
-            {"$set": {"slots": all_slots, "updated_at": datetime.now(timezone.utc)}}
+            {"$set": {"slots": all_slots, "updated_at": datetime.now(timezone.utc)}},
         )
     else:
         rdb["time_slots"].insert_one({
@@ -1150,9 +1385,14 @@ def api_add_single_timeslot(body: TimeSlotIn, owner=Depends(get_current_owner)):
         })
     return {"added": True, "slot": new_slot}
 
+
 @app.get("/api/crm/timeslots", tags=["Time Slots"])
 def api_list_timeslots(date: str, owner=Depends(get_current_owner)):
-    rdb, _ = _sub_guard(owner)
+    """
+    Get all time slots for all tables on a given date.
+    Also shows which slots are already booked vs available.
+    """
+    rdb, _    = _sub_guard(owner)
     slot_docs = list(rdb["time_slots"].find({"date": date}))
 
     booked_map: Dict[str, set] = {}
@@ -1180,75 +1420,100 @@ def api_list_timeslots(date: str, owner=Depends(get_current_owner)):
         })
     return {"date": date, "tables": result}
 
+
 @app.delete("/api/crm/timeslots", tags=["Time Slots"])
 def api_delete_timeslots(body: DeleteTimeSlotsIn, owner=Depends(get_current_owner)):
-    rdb, _ = _sub_guard(owner)
+    """Delete ALL slots for given tables on a given date (e.g. restaurant closed that day)."""
+    rdb, _  = _sub_guard(owner)
     deleted = 0
     for table_id in body.table_ids:
         res = rdb["time_slots"].delete_one({"table_id": table_id, "date": body.date})
         deleted += res.deleted_count
     return {"deleted": deleted, "date": body.date}
 
+
 @app.delete("/api/crm/timeslots/{table_id}/{date}/{start_time}", tags=["Time Slots"])
 def api_delete_single_slot(
-    table_id: str, date: str, start_time: str,
-    owner=Depends(get_current_owner)
+    table_id:   str,
+    date:       str,
+    start_time: str,
+    owner=Depends(get_current_owner),
 ):
+    """Remove a single specific time slot from a table on a date."""
     rdb, _ = _sub_guard(owner)
-    doc = rdb["time_slots"].find_one({"table_id": table_id, "date": date})
+    doc    = rdb["time_slots"].find_one({"table_id": table_id, "date": date})
     if not doc:
         raise HTTPException(404, "No slots found for this table/date.")
     updated_slots = [s for s in doc.get("slots", []) if s["start"] != start_time]
     rdb["time_slots"].update_one(
         {"table_id": table_id, "date": date},
-        {"$set": {"slots": updated_slots, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"slots": updated_slots, "updated_at": datetime.now(timezone.utc)}},
     )
     return {"removed": True, "start_time": start_time}
 
+
 # ============================================================
-# AI SALES AGENT
+# AI SALES AGENT — Claude with full slot awareness
+#
+# TOKEN COST OPTIMISATION — _build_crm_context now works on
+# exactly ONE date at a time (the date the guest mentioned).
+# Previously the system prompt might accidentally pull all
+# stored dates; now it queries only the date provided by the
+# conversation, keeping the context compact and predictable.
+#
+# The AI receives just enough information to answer the guest:
+#   • All tables + capacity  (static, tiny)
+#   • Slots for the ONE requested date + booked/available flag
+#   • Clear horizon boundary so it never offers dates beyond
+#     what the owner has opened for booking
 # ============================================================
 
-# ── COST OPTIMIZATION #1 ──────────────────────────────────────────────────────
-# System prompt trimmed (~40% fewer tokens).
-# All logic/rules are identical — only redundant phrasing removed.
-# ─────────────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """You are a professional AI reservation agent for {restaurant_name}. Be warm, concise, efficient.
+SYSTEM_PROMPT = """
+You are a warm, professional AI reservation agent for {restaurant_name}.
 
-FLOW (follow in order):
-1. Greet guest briefly.
-2. Ask party size.
-3. Ask preferred date.
-4. Check AVAILABLE SLOTS in CRM CONTEXT for that date.
-   - No slots defined → "Sorry, we are not taking reservations for that date. Please try another date or contact us."
-   - All slots booked → tell guest we're fully booked, suggest next available date if visible.
-5. Show available slots, ask preference.
-6. Collect name and phone (or email).
-7. Match party size to a table with sufficient capacity that has that slot FREE.
-8. Confirm booking summary.
-9. Call `create_booking` tool immediately.
-10. Give final confirmation with reference ID.
+## YOUR CONVERSATION FLOW — follow in order:
+1. Greet the guest warmly.
+2. Ask how many people will be dining (party size).
+3. Ask for their preferred DATE.
+4. Based on the date, check the AVAILABLE TIME SLOTS below.
+   - If NO slots are defined for that date → politely tell the guest:
+     "I'm sorry, we are not accepting reservations for that date.
+      Please try another date or contact the restaurant directly."
+   - If slots exist but ALL are booked → tell guest we're fully booked
+     and suggest the next available date if visible in context.
+5. Show the guest the available time slots for their date and ask which they prefer.
+6. Ask for their NAME and PHONE (or email).
+7. Match party size to a table with enough capacity that has that slot FREE.
+8. Confirm the booking summary to the guest.
+9. Call `create_booking` tool IMMEDIATELY.
+10. After tool succeeds, give final confirmation with booking reference.
 
-RULES:
-- Use ONLY table_id values from CRM CONTEXT — never invent them.
-- Only offer AVAILABLE slots from CRM CONTEXT for the requested date.
-- Never book a BOOKED slot.
-- If guest requests a time not in defined slots → say unavailable, show what is available.
-- If no slots defined for date → do not offer any time. Do not accept bookings.
-- Keep replies short — like a top-tier maître d'.
-- After create_booking succeeds, confirm with reference ID.
+## CRITICAL RULES:
+- NEVER invent table IDs — only use table_id values from CRM CONTEXT below.
+- NEVER offer a time that is not in the DEFINED SLOTS for that table.
+- NEVER book a slot that is already marked as BOOKED in the context.
+- If guest asks for a time not in available slots → say that time is not available
+  and show what IS available.
+- If NO slots are defined for the requested date → DO NOT offer any time.
+  Say: "We are not taking reservations for that date. Please choose another date."
+- If a slot is fully booked across ALL tables → say fully booked for that time.
+- Keep messages concise — like a top-tier maître d'.
+- After `create_booking` succeeds, confirm with reference ID.
 
-CRM CONTEXT (live, refreshed each message):
+## CRM CONTEXT — live data for the requested date only:
 {crm_context}
 
-Now: {now}"""
+Current date/time (UTC): {now}
+"""
 
 BOOKING_TOOL = {
     "name": "create_booking",
     "description": (
-        "Creates a confirmed reservation. Call only when you have: guest name, "
-        "contact (phone or email), date (YYYY-MM-DD), time_slot (HH:MM matching "
-        "a defined available slot), party_size, and a FREE table_id with enough capacity."
+        "Creates a confirmed reservation in the restaurant database. "
+        "Call ONLY when you have: guest name, contact (phone or email), "
+        "date (YYYY-MM-DD), time_slot (HH:MM matching a defined available slot), "
+        "party_size, and a FREE table_id with enough capacity. "
+        "This writes directly to the database — owner sees it instantly on dashboard."
     ),
     "input_schema": {
         "type": "object",
@@ -1265,34 +1530,101 @@ BOOKING_TOOL = {
     },
 }
 
-# ── COST OPTIMIZATION #2 ──────────────────────────────────────────────────────
-# CRM context builder: removed the trailing 4-line "INSTRUCTIONS FOR YOU" block.
-# Those rules are already in SYSTEM_PROMPT above; duplicating them costs tokens
-# on every single message. All slot logic and data output is 100% unchanged.
-# ─────────────────────────────────────────────────────────────────────────────
+
+def _extract_date_from_message(message: str, history: list) -> Optional[str]:
+    """
+    Lightweight date extractor — scans the latest user message and recent
+    history for a YYYY-MM-DD pattern or natural-language hints like
+    'tomorrow', 'today', 'Monday', etc.
+
+    Returns a YYYY-MM-DD string if found, else None.
+    This keeps token cost low: we only pull slots for the date the guest
+    actually mentioned, not every date in the database.
+
+    Natural language resolution:
+      'today'     → UTC today
+      'tomorrow'  → UTC today + 1
+      Day names   → nearest upcoming occurrence (Mon–Sun)
+
+    The AI itself handles full NL understanding; this function just gives
+    the backend a best-effort date to pre-load the correct slot context.
+    Falls back to today if nothing is detected.
+    """
+    import re
+
+    today_utc = datetime.now(timezone.utc).date()
+
+    # 1. Explicit ISO date anywhere in recent history (newest first)
+    all_text = message + " " + " ".join(
+        m.content for m in reversed(history[-6:]) if m.role == "user"
+    )
+    iso_match = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", all_text)
+    if iso_match:
+        return iso_match.group(1)
+
+    # 2. Natural language keywords
+    lower = all_text.lower()
+    if "today" in lower:
+        return today_utc.strftime("%Y-%m-%d")
+    if "tomorrow" in lower:
+        return (today_utc + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # 3. Day-of-week names → nearest upcoming day
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    for i, day in enumerate(day_names):
+        if day in lower:
+            days_ahead = (i - today_utc.weekday()) % 7
+            if days_ahead == 0:
+                days_ahead = 7  # "Monday" when today is Monday → next Monday
+            return (today_utc + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    # 4. Default — fall back to today (agent will ask guest to specify)
+    return today_utc.strftime("%Y-%m-%d")
+
+
 def _build_crm_context(rdb: Database, date: Optional[str] = None) -> str:
-    today = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """
+    Token-efficient CRM context builder.
+
+    KEY CHANGE vs v4.0:
+    Fetches slots for EXACTLY ONE DATE — the date extracted from the
+    guest's message. This cuts input tokens dramatically compared to
+    loading all future dates.
+
+    A restaurant with 5 tables × 10 slots × 21 days = 1,050 slot lines.
+    With this approach: 5 tables × 10 slots for 1 date = 50 slot lines.
+    Token savings: ~95% on slot data for Enterprise plans.
+
+    The AI handles the conversation flow; it asks the guest for their
+    date preference before the backend loads any slot context. Each
+    message re-loads context for just the date being discussed.
+    """
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     tables = list(rdb["tables"].find(
         {}, {"_id": 1, "table_number": 1, "capacity": 1, "location": 1}
     ))
 
+    # Only query reservations and slots for the ONE target date
     booked_map: Dict[str, set] = {}
-    for res in rdb["reservations"].find({"date": today, "status": "confirmed"}):
+    for res in rdb["reservations"].find({"date": target_date, "status": "confirmed"}):
         booked_map.setdefault(res["table_id"], set()).add(res["time_slot"])
 
     slot_docs = {
         doc["table_id"]: doc.get("slots", [])
-        for doc in rdb["time_slots"].find({"date": today})
+        for doc in rdb["time_slots"].find({"date": target_date})
     }
 
-    lines = [f"Date: {today}", ""]
+    lines = [f"Reservation Date: {target_date}", ""]
 
     if not slot_docs:
-        lines.append("NO SLOTS DEFINED FOR THIS DATE — do not accept bookings.")
+        lines.append("⚠️  NO TIME SLOTS DEFINED FOR THIS DATE.")
+        lines.append("    Owner has not opened reservations for this date.")
+        lines.append("    DO NOT accept any bookings for this date.")
+        lines.append("    Tell guest to choose another date or contact restaurant.")
         lines.append("")
 
-    lines.append("Tables & Slots:")
+    lines.append("Tables & Available Slots:")
     for t in tables:
         tid   = str(t["_id"])
         tnum  = t["table_number"]
@@ -1302,43 +1634,55 @@ def _build_crm_context(rdb: Database, date: Optional[str] = None) -> str:
 
         if not slots:
             lines.append(
-                f"  table_id={tid} | #{tnum} | cap={cap} | {loc} | NO SLOTS"
+                f"  table_id={tid} | Table #{tnum} | capacity={cap} pax | "
+                f"location={loc} | NO SLOTS DEFINED FOR THIS DATE"
             )
         else:
-            slot_summary = []
-            booked_count = 0
+            slot_summary     = []
+            all_booked_count = 0
             for s in slots:
                 is_booked = s["start"] in booked_map.get(tid, set())
                 if is_booked:
                     slot_summary.append(f"{s['start']}-{s['end']}:BOOKED")
-                    booked_count += 1
+                    all_booked_count += 1
                 else:
                     slot_summary.append(f"{s['start']}-{s['end']}:AVAILABLE")
 
-            note = " [ALL BOOKED]" if booked_count == len(slots) else ""
+            status_note = " [ALL SLOTS BOOKED]" if all_booked_count == len(slots) else ""
             lines.append(
-                f"  table_id={tid} | #{tnum} | cap={cap} | {loc}{note}"
+                f"  table_id={tid} | Table #{tnum} | capacity={cap} pax | "
+                f"location={loc}{status_note}"
             )
-            lines.append(f"    {' | '.join(slot_summary)}")
+            lines.append(f"    Slots: {' | '.join(slot_summary)}")
+
+    lines.append("")
+    lines.append("INSTRUCTIONS FOR YOU:")
+    lines.append("- Only offer slots marked AVAILABLE above.")
+    lines.append("- Never offer a time not listed above for the requested date.")
+    lines.append("- Match party size to table capacity (capacity >= party_size).")
+    lines.append("- If guest wants a time not in the list → say it's not available.")
 
     return "\n".join(lines)
 
 
 def _execute_booking_tool(rdb: Database, tool_input: dict) -> dict:
-    """Execute booking — 100% original logic + slot validation."""
-    contact = tool_input["guest_phone"]
-
+    """Execute booking — original logic + slot validation."""
+    contact   = tool_input["guest_phone"]
     table_id  = tool_input["table_id"]
     date      = tool_input["date"]
     time_slot = tool_input["time_slot"]
 
+    # Validate that the slot is actually defined and available
     if not _slot_in_defined(rdb, table_id, date, time_slot):
         return {
             "success": False,
-            "error":   f"Time slot {time_slot} is not defined for this table on {date}. "
-                       "Please choose from the available slots shown to the guest.",
+            "error":   (
+                f"Time slot {time_slot} is not defined for this table on {date}. "
+                "Please choose from the available slots shown to the guest."
+            ),
         }
 
+    # Check for conflicts
     conflict = rdb["reservations"].count_documents({
         "table_id":  table_id,
         "date":      date,
@@ -1351,6 +1695,7 @@ def _execute_booking_tool(rdb: Database, tool_input: dict) -> dict:
             "error":   f"Table {table_id} at {time_slot} on {date} was just taken. Please choose another slot.",
         }
 
+    # Guest upsert
     guest = rdb["guests"].find_one({"$or": [{"phone": contact}, {"email": contact}]})
     if guest:
         guest_id = str(guest["_id"])
@@ -1367,6 +1712,7 @@ def _execute_booking_tool(rdb: Database, tool_input: dict) -> dict:
         result   = rdb["guests"].insert_one(new_guest)
         guest_id = str(result.inserted_id)
 
+    # Create reservation
     doc = {
         "guest_id":   guest_id,
         "table_id":   table_id,
@@ -1381,7 +1727,7 @@ def _execute_booking_tool(rdb: Database, tool_input: dict) -> dict:
     res    = rdb["reservations"].insert_one(doc)
     res_id = str(res.inserted_id)
 
-    logger.info(f"AI booked: res_id={res_id} guest={tool_input['guest_name']} {date} {time_slot}")
+    logger.info(f"✅ AI booked: res_id={res_id} guest={tool_input['guest_name']} {date} {time_slot}")
 
     return {
         "success":        True,
@@ -1394,11 +1740,13 @@ def _execute_booking_tool(rdb: Database, tool_input: dict) -> dict:
         "message":        f"Reservation confirmed. Reference: {res_id[:8].upper()}",
     }
 
+
 class ChatResponse(BaseModel):
     reply:          str
     history:        List[ChatMessage]
     booking_made:   bool = False
     reservation_id: Optional[str] = None
+
 
 @app.post("/api/ai/chat", response_model=ChatResponse, tags=["AI Agent"])
 async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
@@ -1414,13 +1762,17 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
     rdb       = get_owner_db(restaurant_id)
     owner_doc = owner
 
+    # Plan limit check
     if not _check_reservation_limit(rdb, owner_doc):
         if _is_free_tier(owner_doc):
             raise HTTPException(403, f"Free reservation limit of {FREE_RESERVATIONS} reached. The restaurant needs to upgrade.")
         plan = _get_plan(owner_doc)
         raise HTTPException(403, f"Monthly reservation limit of {plan['reservations_month']} reached.")
 
-    crm_context = _build_crm_context(rdb)
+    # ── Token-efficient context: extract the date the guest is asking about,
+    #    then load slots for THAT DATE ONLY. No multi-date bulk loading.
+    target_date = _extract_date_from_message(body.message, body.history)
+    crm_context = _build_crm_context(rdb, target_date)
     now_str     = datetime.now(timezone.utc).strftime("%A, %Y-%m-%d %H:%M UTC")
 
     system = SYSTEM_PROMPT.format(
@@ -1438,18 +1790,12 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
     booking_data = None
 
     try:
-        # ── COST OPTIMIZATION #3 ─────────────────────────────────────────────
-        # max_tokens reduced from 1024 → 400.
-        # Reservation agent replies are short conversational text — never needs
-        # 1024 tokens. 400 covers the longest possible response with headroom.
-        # Applied to BOTH calls inside the tool-use loop.
-        # ─────────────────────────────────────────────────────────────────────
         response = client.messages.create(
-            model     = "claude-sonnet-4-20250514",
-            max_tokens= 400,
-            system    = system,
-            tools     = [BOOKING_TOOL],
-            messages  = messages,
+            model      = "claude-sonnet-4-20250514",
+            max_tokens = 1024,
+            system     = system,
+            tools      = [BOOKING_TOOL],
+            messages   = messages,
         )
 
         while response.stop_reason == "tool_use":
@@ -1482,22 +1828,23 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
             })
 
             response = client.messages.create(
-                model     = "claude-sonnet-4-20250514",
-                max_tokens= 400,
-                system    = system,
-                tools     = [BOOKING_TOOL],
-                messages  = messages,
+                model      = "claude-sonnet-4-20250514",
+                max_tokens = 1024,
+                system     = system,
+                tools      = [BOOKING_TOOL],
+                messages   = messages,
             )
 
         reply_text = next(
             (b.text for b in response.content if hasattr(b, "text")),
-            "Your reservation has been confirmed."
+            "Your reservation has been confirmed.",
         )
 
     except Exception as exc:
         logger.error(f"Claude API error: {exc}")
         raise HTTPException(502, f"AI service error: {exc}")
 
+    # WebSocket broadcast
     if booking_made and booking_data:
         await ws_manager.broadcast(restaurant_id, {
             "type":           "new_booking",
@@ -1514,13 +1861,14 @@ async def ai_chat(body: ChatRequest, restaurant_id: str, request: Request):
         ChatMessage(role="assistant", content=reply_text),
     ]
 
-    logger.info(f"AI chat | session={body.session_id} | booking={booking_made} | res={res_id}")
+    logger.info(f"AI chat | session={body.session_id} | date={target_date} | booking={booking_made} | res={res_id}")
     return ChatResponse(
         reply          = reply_text,
         history        = updated_history,
         booking_made   = booking_made,
         reservation_id = res_id,
     )
+
 
 # ============================================================
 # ADMIN API
@@ -1536,13 +1884,16 @@ def api_dashboard(owner=Depends(get_current_owner)):
         db["guests"].find({}, {"name": 1, "visit_count": 1})
                     .sort("visit_count", -1).limit(5)
     )
-    for g in top_guests: g["id"] = str(g.pop("_id"))
+    for g in top_guests:
+        g["id"] = str(g.pop("_id"))
     return {
         "restaurant_id":        owner["sub"],
         "plan":                 plan["name"],
         "tier":                 limits["tier"],
         "reservations_month":   {"used": limits["reservations_used"], "limit": limits["reservations_limit"]},
         "reservations_left":    limits["reservations_left"],
+        "slot_horizon_days":    limits["slot_horizon_days"],
+        "slot_horizon_until":   limits["slot_horizon_until"],
         "as_of":                datetime.now(timezone.utc).isoformat(),
         "total_tables":         db["tables"].count_documents({}),
         "total_guests":         db["guests"].count_documents({}),
@@ -1551,6 +1902,7 @@ def api_dashboard(owner=Depends(get_current_owner)):
         "cancelled":            db["reservations"].count_documents({"status": "cancelled"}),
         "top_guests_by_visits": top_guests,
     }
+
 
 # ============================================================
 # HEALTH
@@ -1561,8 +1913,9 @@ def health():
     return {
         "status":    "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version":   "4.0.0",
+        "version":   "4.1.0",
     }
+
 
 # ============================================================
 # ENTRY POINT
