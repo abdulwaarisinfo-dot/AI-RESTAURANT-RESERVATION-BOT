@@ -198,11 +198,7 @@
       <a href="/dashboard">Dashboard</a>
       <a href="/crm" class="active">CRM</a>
       <a href="/billing">Billing</a>
-      {#
-        owner._id is a raw pymongo ObjectId (not popped in crm_page()).
-        Jinja2 renders it as the 24-char hex string via str(ObjectId).
-        FastAPI's reservation_page() parses it back with ObjectId(restaurant_id).
-      #}
+      {# owner._id renders as ObjectId string — correct for /reserve/ URL #}
       <a href="/reserve/{{ owner._id }}" target="_blank" class="btn btn-outline btn-sm">Booking Page ↗</a>
       <a href="/logout" class="btn btn-ghost btn-sm">Log Out</a>
     </div>
@@ -246,15 +242,12 @@
       <div style="padding:12px 16px;margin-top:8px;">
         <div style="background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
           <div style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:3px;">Current Plan</div>
-          {# is_free_tier = _is_free_tier(owner) passed by crm_page() #}
           <div style="font-size:.88rem;color:var(--gold);">{% if is_free_tier %}Free Tier{% else %}{{ plan.name }}{% endif %}</div>
           <div style="font-size:.72rem;color:var(--text-3);margin-top:2px;">
             {#
-              tables|length = number of table docs returned by crm_page().
-              limits.tables_max from _get_effective_limits():
-                Free tier → FREE_TABLES_MAX = 3
-                Paid tier → plan["tables_max"] from PLANS dict
-              This matches the cap enforced by _check_table_limit().
+              Use limits.tables_max (from _get_effective_limits) not plan.tables_max.
+              Free tier: limits.tables_max = FREE_TABLES_MAX = 3.
+              Paid tier: limits.tables_max = plan["tables_max"] from PLANS dict.
             #}
             {{ tables|length }} / {{ limits.tables_max }} tables
           </div>
@@ -264,21 +257,14 @@
 
     <main class="main-content">
       <h1 class="page-title">CRM</h1>
-      {#
-        owner.restaurant_name from the owners collection document.
-        crm_page() does NOT pop _id from owner, so owner._id is still available.
-      #}
+      {# owner.restaurant_name from the owners collection document #}
       <p class="page-sub">{{ owner.restaurant_name }} — manage tables, time slots, guests &amp; reservations</p>
 
       {% if is_free_tier %}
       <div class="free-banner">
         <span>
           <strong>Free Tier</strong> —
-          {#
-            limits.reservations_left from _get_effective_limits():
-              max(0, FREE_RESERVATIONS - used)
-            free_reservations = FREE_RESERVATIONS = 10, passed by crm_page().
-          #}
+          {# limits.reservations_left and free_reservations both from crm_page context #}
           {{ limits.reservations_left }} of {{ free_reservations }} free reservations remaining.
         </span>
         <a href="/billing" class="btn btn-primary btn-sm">Upgrade →</a>
@@ -286,10 +272,10 @@
       {% endif %}
 
       {#
-        usage_pct: inline Jinja2 calculation using limits dict keys:
+        usage_pct computed from limits dict keys:
           limits.reservations_used  — set in _get_effective_limits()
           limits.reservations_limit — same
-        Guard against division by zero with  if limits.reservations_limit > 0.
+        Using Jinja2 inline calculation to avoid needing an extra context variable.
       #}
       {% set usage_pct = ((limits.reservations_used / limits.reservations_limit) * 100) | round | int if limits.reservations_limit > 0 else 0 %}
       <div class="usage-bar-wrap">
@@ -316,9 +302,8 @@
           <span class="toolbar-title">Tables</span>
           <div class="toolbar-right">
             {#
-              limits.tables_max is the enforced cap used by _check_table_limit():
-                Free tier → FREE_TABLES_MAX = 3
-                Paid tier → plan["tables_max"] from PLANS dict
+              limits.tables_max is the enforced cap (_check_table_limit uses this).
+              For free tier = FREE_TABLES_MAX (3); paid = plan["tables_max"].
             #}
             <span class="limit-chip">{{ tables|length }} / {{ limits.tables_max }} max</span>
             <button class="btn btn-primary btn-sm" onclick="openModal('modal-table', false)">+ Add Table</button>
@@ -339,10 +324,7 @@
                 <td>{{ t.capacity }} pax</td>
                 <td><span class="badge badge-muted">{{ t.location }}</span></td>
                 <td>
-                  {#
-                    t.id = str(t.pop("_id")) set in crm_page() for each table doc.
-                    Passed to JS functions as string arguments.
-                  #}
+                  {# t.id set via  t["id"] = str(t.pop("_id"))  in crm_page() #}
                   <button class="action-btn" onclick="editTable('{{ t.id }}','{{ t.table_number }}','{{ t.capacity }}','{{ t.location }}')" title="Edit">✎</button>
                   <button class="action-btn del" onclick="deleteTable('{{ t.id }}')" title="Delete">✕</button>
                 </td>
@@ -367,11 +349,8 @@
           Unlimited slots — only actual reservations count toward your plan limit.
         </div>
 
-        {#
-          Date input value is set by JS on DOMContentLoaded (TODAY constant).
-          crm_page() does not pass `today` in its template context,
-          so we cannot use {{ today }} here.
-        #}
+        <!-- Date selector: TODAY_STR is injected by JS (see bottom) since crm_page
+             does not pass `today` in context. The input value is set via JS on DOMContentLoaded. -->
         <div class="slots-date-bar">
           <label>Viewing date:</label>
           <input type="date" id="slots-date" onchange="loadSlots(this.value)" />
@@ -385,11 +364,7 @@
             <span style="font-size:.75rem;color:var(--text-3);">Select tables + time range → auto-generate slots</span>
           </div>
 
-          {#
-            Table checkboxes rendered from {{ tables }} passed by crm_page().
-            Each label's checkbox value = t.id (str(_id)) for use in bulkAddSlots().
-            POST body field is table_ids (List[str]) — matches BulkTimeSlotsIn schema.
-          #}
+          <!-- Table checkboxes: rendered from {{ tables }} passed by crm_page() -->
           <div style="font-size:.75rem;color:var(--text-3);margin-bottom:6px;">Select tables:</div>
           <div class="bulk-table-checks" id="bulk-table-checks">
             {% for t in tables %}
@@ -410,11 +385,8 @@
           </div>
           {% endif %}
 
-          {#
-            bulk-date defaults to today via JS (not {{ today }} — not in context).
-            Fields map to BulkTimeSlotsIn: date, start_time, end_time, duration_mins.
-            v4.2: no date horizon enforcement — any future date accepted on all plans.
-          #}
+          <!-- Time range + duration —
+               bulk-date defaults to today (set via JS, not {{ today }} which isn't in context) -->
           <div class="bulk-form-grid" style="margin-bottom:12px;">
             <div class="form-group">
               <label class="form-label">Date</label>
@@ -430,7 +402,6 @@
             </div>
             <div class="form-group">
               <label class="form-label">Slot (mins)</label>
-              {# duration_mins field — matches BulkTimeSlotsIn.duration_mins default=30 #}
               <select class="form-select" id="bulk-duration">
                 <option value="30">30 min</option>
                 <option value="45">45 min</option>
@@ -448,7 +419,7 @@
           </button>
         </div>
 
-        <!-- Live slot viewer — populated by loadSlots() via GET /api/crm/timeslots?date= -->
+        <!-- Live slot viewer — populated by loadSlots() via /api/crm/timeslots?date= -->
         <div class="toolbar" style="margin-bottom:12px;">
           <span class="toolbar-title">Slot Schedule</span>
           <button class="btn btn-outline btn-sm" onclick="loadSlots(document.getElementById('slots-date').value)">↻ Refresh</button>
@@ -486,20 +457,12 @@
                 </td>
                 <td>{{ g.phone or '—' }}</td>
                 <td>{{ g.email or '—' }}</td>
-                {#
-                  g.visit_count incremented by:
-                    api_create_reservation: $inc visit_count
-                    _execute_booking_tool: $inc visit_count (existing) or visit_count=1 (new)
-                #}
+                {# g.visit_count — incremented by both CRM API and AI agent #}
                 <td><span class="badge badge-gold">{{ g.visit_count }}</span></td>
                 <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.notes or '—' }}</td>
                 <td>
-                  {#
-                    g.id = str(g.pop("_id")) set in crm_page().
-                    editGuest() args must not contain single quotes — escape or omit.
-                    For production use, consider data attributes instead of inline JS args.
-                  #}
-                  <button class="action-btn" onclick="editGuest('{{ g.id }}','{{ g.name | replace("'", "\\'") }}','{{ g.phone or '' }}','{{ g.email or '' }}','{{ g.notes or '' | replace("'", "\\'") }}')" title="Edit">✎</button>
+                  {# g.id set via  g["id"] = str(g.pop("_id"))  in crm_page() #}
+                  <button class="action-btn" onclick="editGuest('{{ g.id }}','{{ g.name }}','{{ g.phone or '' }}','{{ g.email or '' }}','{{ g.notes or '' }}')" title="Edit">✎</button>
                   <button class="action-btn del" onclick="deleteGuest('{{ g.id }}')" title="Delete">✕</button>
                 </td>
               </tr>
@@ -517,12 +480,6 @@
         <div class="toolbar">
           <span class="toolbar-title">Reservations</span>
           <div class="toolbar-right">
-            {#
-              Date filter reloads the page with ?date=YYYY-MM-DD.
-              api_list_reservations supports a `date` query param, but
-              crm_page() always fetches all reservations (.find().sort().limit(50))
-              without filtering — the date filter here is UI-only via page reload.
-            #}
             <input type="date" class="search-input" id="date-filter" style="width:auto;" onchange="filterByDate(this.value)" />
             <button class="btn btn-primary btn-sm" onclick="openModal('modal-reservation', false)">+ Add Reservation</button>
           </div>
@@ -539,21 +496,10 @@
             <tbody>
               {% for r in reservations %}
               <tr>
-                {#
-                  r.id = str(r.pop("_id")) from crm_page().
-                  [:8]|upper matches api_dashboard and WS broadcast reference format.
-                #}
+                {# r.id = str(r.pop("_id")) from crm_page — same pattern as dashboard #}
                 <td style="font-family:monospace;font-size:.75rem;">{{ r.id[:8]|upper }}</td>
-                {#
-                  r.guest_id = ObjectId string stored in the reservation document
-                  (set by api_create_reservation and _execute_booking_tool).
-                  Truncated to 8 chars + ellipsis for display.
-                #}
+                {# r.guest_id and r.table_id are raw ObjectId strings stored in reservation doc #}
                 <td style="font-family:monospace;font-size:.75rem;color:var(--text-3);">{{ r.guest_id[:8] }}…</td>
-                {#
-                  r.table_id = ObjectId string stored in the reservation document.
-                  Truncated to 8 chars + ellipsis for display.
-                #}
                 <td style="font-family:monospace;font-size:.75rem;color:var(--text-3);">{{ r.table_id[:8] }}…</td>
                 <td>{{ r.date }}</td>
                 <td>{{ r.time_slot }}</td>
@@ -562,19 +508,12 @@
                   <span class="badge {% if r.status == 'confirmed' %}badge-green{% else %}badge-red{% endif %}">{{ r.status }}</span>
                 </td>
                 <td>
-                  {#
-                    r.source = "ai_agent" written by _execute_booking_tool().
-                    api_create_reservation() does NOT set a source field,
-                    so  r.source  is absent → falls back to 'manual'.
-                  #}
+                  {# r.source = "ai_agent" for AI bookings; absent/None for manual CRM entries #}
                   <span class="badge {% if r.source == 'ai_agent' %}badge-gold{% else %}badge-muted{% endif %}">{{ r.source or 'manual' }}</span>
                 </td>
                 <td>
                   {% if r.status == 'confirmed' %}
-                  {#
-                    PATCH /api/crm/reservations/{res_id}/cancel
-                    → api_cancel_reservation() sets status = "cancelled".
-                  #}
+                  {# PATCH /api/crm/reservations/{res_id}/cancel — matches api_cancel_reservation() #}
                   <button class="action-btn del" onclick="cancelRes('{{ r.id }}')" title="Cancel">✕</button>
                   {% else %}
                   <span style="color:var(--text-3);font-size:.75rem;">—</span>
@@ -607,18 +546,15 @@
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Table Number</label>
-            {# → TableIn.table_number (int) #}
             <input class="form-input" type="number" id="table-number" placeholder="e.g. 5" min="1" required />
           </div>
           <div class="form-group">
             <label class="form-label">Capacity (pax)</label>
-            {# → TableIn.capacity (int) #}
             <input class="form-input" type="number" id="table-capacity" placeholder="e.g. 4" min="1" required />
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Location</label>
-          {# → TableIn.location (Optional[str], default "main") #}
           <input class="form-input" type="text" id="table-location" placeholder="main / terrace / private" value="main" />
         </div>
         <div style="display:flex;gap:10px;margin-top:6px;">
@@ -640,24 +576,20 @@
         <input type="hidden" id="guest-edit-id" />
         <div class="form-group">
           <label class="form-label">Full Name</label>
-          {# → GuestIn.name (str, required) #}
           <input class="form-input" type="text" id="guest-name" placeholder="e.g. Sarah Johnson" required />
         </div>
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Phone</label>
-            {# → GuestIn.phone (Optional[str]) #}
             <input class="form-input" type="tel" id="guest-phone" placeholder="+1 555 0100" />
           </div>
           <div class="form-group">
             <label class="form-label">Email</label>
-            {# → GuestIn.email (Optional[EmailStr]) #}
             <input class="form-input" type="email" id="guest-email" placeholder="guest@email.com" />
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Notes</label>
-          {# → GuestIn.notes (Optional[str]) #}
           <textarea class="form-textarea" id="guest-notes" placeholder="Allergies, preferences…" style="min-height:70px;"></textarea>
         </div>
         <div style="display:flex;gap:10px;margin-top:6px;">
@@ -679,19 +611,17 @@
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Guest</label>
-            {# → ReservationIn.guest_id (str) — must be an existing guest _id #}
             <select class="form-select" id="res-guest">
               <option value="">Select guest…</option>
-              {# g.id = str(g.pop("_id")) from crm_page() #}
+              {# guests list from crm_page() — g.id = str(_id) #}
               {% for g in guests %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">Table</label>
-            {# → ReservationIn.table_id (str) — must be an existing table _id #}
             <select class="form-select" id="res-table">
               <option value="">Select table…</option>
-              {# t.id = str(t.pop("_id")) from crm_page() #}
+              {# tables list from crm_page() — t.id = str(_id) #}
               {% for t in tables %}<option value="{{ t.id }}">Table {{ t.table_number }} ({{ t.capacity }} pax)</option>{% endfor %}
             </select>
           </div>
@@ -699,35 +629,22 @@
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Date</label>
-            {# → ReservationIn.date (str, YYYY-MM-DD) #}
             <input class="form-input" type="date" id="res-date" required />
           </div>
           <div class="form-group">
             <label class="form-label">Time (HH:MM)</label>
-            {#
-              → ReservationIn.time_slot (str).
-              api_create_reservation does NOT validate against defined time slots —
-              that check only exists in _execute_booking_tool (AI path).
-              The manual CRM path only checks for double-booking via _slot_available().
-            #}
             <input class="form-input" type="time" id="res-time" required />
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Party Size</label>
-          {# → ReservationIn.party_size (int) #}
           <input class="form-input" type="number" id="res-party" min="1" placeholder="e.g. 4" required />
         </div>
         <div class="form-group">
           <label class="form-label">Notes</label>
-          {# → ReservationIn.notes (Optional[str]) #}
           <input class="form-input" type="text" id="res-notes" placeholder="Special requests…" />
         </div>
-        {#
-          limits.reservations_left from _get_effective_limits().
-          When 0, the server will also reject via _check_reservation_limit(),
-          but we disable the button client-side for immediate feedback.
-        #}
+        {# limits.reservations_left from _get_effective_limits() — 0 means at cap #}
         {% if limits.reservations_left == 0 %}
         <div style="background:var(--bg-3);border:1px solid var(--red);border-radius:var(--radius);padding:8px 12px;font-size:.8rem;color:var(--red);">
           Reservation limit reached. <a href="/billing" style="color:var(--gold);">Upgrade your plan</a> to continue.
@@ -754,7 +671,6 @@
       <div class="modal-form">
         <div class="form-group">
           <label class="form-label">Table</label>
-          {# → TimeSlotIn.table_id (str) #}
           <select class="form-select" id="ss-table">
             <option value="">Select table…</option>
             {% for t in tables %}<option value="{{ t.id }}">Table {{ t.table_number }} ({{ t.capacity }} pax)</option>{% endfor %}
@@ -762,18 +678,15 @@
         </div>
         <div class="form-group">
           <label class="form-label">Date</label>
-          {# → TimeSlotIn.date (str, YYYY-MM-DD). Pre-filled by openSingleSlotModal(). #}
           <input class="form-input" type="date" id="ss-date" />
         </div>
         <div class="modal-form-row">
           <div class="form-group">
             <label class="form-label">Start</label>
-            {# → TimeSlotIn.start_time (str, HH:MM) #}
             <input class="form-input" type="time" id="ss-start" />
           </div>
           <div class="form-group">
             <label class="form-label">End</label>
-            {# → TimeSlotIn.end_time (str, HH:MM) #}
             <input class="form-input" type="time" id="ss-end" />
           </div>
         </div>
@@ -790,6 +703,8 @@
 
   <script>
     // ── Toast ─────────────────────────────────────────────────────────────────
+    // Required by all async operations in this page.
+    // Was called everywhere in the original but never defined.
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
       const toast     = document.createElement('div');
@@ -804,7 +719,8 @@
     }
 
     // ── Today's date ─────────────────────────────────────────────────────────
-    // crm_page() does NOT pass `today` in the template context — compute client-side.
+    // crm_page() in main.py does NOT pass `today` in the template context,
+    // so we cannot use {{ today }}. Compute it client-side instead.
     const TODAY = new Date().toISOString().slice(0, 10);
 
     // ── Tabs ─────────────────────────────────────────────────────────────────
@@ -828,15 +744,19 @@
       if (!date) { location.href = '/crm'; return; }
       location.href = `/crm?date=${date}`;
     }
+    function getToken() {
+      return document.cookie.split(';')
+        .find(c => c.trim().startsWith('access_token='))?.split('=')[1] || '';
+    }
 
-    // ── API wrapper ───────────────────────────────────────────────────────────
-    // Uses credentials:'include' to send the httpOnly JWT cookie automatically.
-    // The server reads it via request.cookies.get("access_token") in
-    // get_current_owner() / get_owner_from_cookie(). JS cannot read httpOnly cookies.
+    // Generic fetch wrapper — sends JWT from httpOnly cookie via Authorization header.
+    // Note: httpOnly cookies can't be read by JS; getToken() will always return ''.
+    // The server reads the cookie directly via request.cookies.get("access_token"),
+    // so passing credentials: 'include' is the correct approach for cookie-auth APIs.
     async function api(method, url, body) {
       const opts = {
         method,
-        credentials: 'include',
+        credentials: 'include',   // sends the httpOnly cookie automatically
         headers: { 'Content-Type': 'application/json' },
       };
       if (body) opts.body = JSON.stringify(body);
@@ -890,13 +810,7 @@
 
     // ── TIME SLOTS ────────────────────────────────────────────────────────────
     // GET /api/crm/timeslots?date=YYYY-MM-DD → api_list_timeslots()
-    // Returns: {
-    //   date: str,
-    //   tables: [{
-    //     table_id, table_number, capacity, location,
-    //     slots: [{ start, end, status: "available"|"booked" }]
-    //   }]
-    // }
+    // Returns: { date, tables: [{table_id, table_number, capacity, location, slots: [{start, end, status}]}] }
     async function loadSlots(date) {
       if (!date) return;
       const view = document.getElementById('slots-view');
@@ -924,6 +838,10 @@
       const summary = `${totalAvail} available · ${totalBooked} booked`;
       document.getElementById('slots-date-label').textContent = summary;
 
+      // Gather all table_ids for "Clear All" (uses the bulk-table checkboxes which
+      // are rendered from server-side {{ tables }}, so they always match)
+      const allTableIds = [...document.querySelectorAll('[name=bulk-tables]')].map(cb => cb.value);
+
       let html = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
           <div style="font-size:.78rem;color:var(--text-3);">${summary}</div>
@@ -942,8 +860,8 @@
             <div class="table-slot-header">
               <div>
                 <div class="table-slot-name">Table ${t.table_number}
-                  ${allBooked ? '<span class="badge badge-red"  style="margin-left:6px;font-size:.68rem;">Fully Booked</span>' : ''}
-                  ${!hasSlots ? '<span class="badge badge-muted" style="margin-left:6px;font-size:.68rem;">No Slots</span>'     : ''}
+                  ${allBooked  ? '<span class="badge badge-red"  style="margin-left:6px;font-size:.68rem;">Fully Booked</span>' : ''}
+                  ${!hasSlots  ? '<span class="badge badge-muted" style="margin-left:6px;font-size:.68rem;">No Slots</span>'     : ''}
                 </div>
                 <div class="table-slot-meta">${t.capacity} pax · ${t.location}</div>
               </div>
@@ -961,9 +879,8 @@
         } else {
           t.slots.forEach(s => {
             if (s.status === 'available') {
-              // ':' must be URL-encoded for the DELETE path param:
+              // start_time contains ':' — must URL-encode for the DELETE route
               // DELETE /api/crm/timeslots/{table_id}/{date}/{start_time}
-              // → api_delete_single_slot() uses table_id, date, start_time as path params.
               const encStart = encodeURIComponent(s.start);
               html += `
                 <span class="slot-chip available">
@@ -973,9 +890,7 @@
                     title="Remove">✕</button>
                 </span>`;
             } else {
-              // Booked slots cannot be removed — a confirmed reservation exists.
-              // Must cancel the reservation first via PATCH /api/crm/reservations/{id}/cancel.
-              html += `<span class="slot-chip booked" title="Booked — cancel the reservation first">${s.start}–${s.end} 🔒</span>`;
+              html += `<span class="slot-chip booked" title="Booked — cannot remove">${s.start}–${s.end} 🔒</span>`;
             }
           });
         }
@@ -985,15 +900,14 @@
       view.innerHTML = html;
     }
 
-    // Pre-fill date in single-slot modal and open it
+    // Open single-slot modal and pre-fill the date
     function openSingleSlotModal(date) {
       document.getElementById('ss-date').value = date;
       openModal('modal-single-slot', false);
     }
 
     // POST /api/crm/timeslots/bulk → api_bulk_create_timeslots()
-    // Body matches BulkTimeSlotsIn: { table_ids, date, start_time, end_time, duration_mins }
-    // Returns: { date, duration_mins, slots_per_table, tables_updated, slots_preview }
+    // Body: { table_ids, date, start_time, end_time, duration_mins }
     async function bulkAddSlots() {
       const tableIds = [...document.querySelectorAll('[name=bulk-tables]:checked')].map(cb => cb.value);
       const date     = document.getElementById('bulk-date').value;
@@ -1013,15 +927,14 @@
           duration_mins: dur,
         });
         showToast(`✓ ${res.slots_per_table} slots added for ${res.tables_updated.length} table(s).`, 'success');
-        // Sync the view date to match the newly created slots date and refresh
+        // Sync view date to the newly created date and reload
         document.getElementById('slots-date').value = date;
         loadSlots(date);
       } catch (e) { showToast(e.message, 'error'); }
     }
 
     // POST /api/crm/timeslots/single → api_add_single_timeslot()
-    // Body matches TimeSlotIn: { table_id, date, start_time, end_time }
-    // Returns: { added: true, slot: {start, end} } or { message: "Slot already exists.", slot }
+    // Body: { table_id, date, start_time, end_time }
     async function saveSingleSlot() {
       const table_id   = document.getElementById('ss-table').value;
       const date       = document.getElementById('ss-date').value;
@@ -1033,6 +946,7 @@
         await api('POST', '/api/crm/timeslots/single', { table_id, date, start_time, end_time });
         showToast('Slot added.', 'success');
         closeModal('modal-single-slot');
+        // Refresh the slot view for the same date
         document.getElementById('slots-date').value = date;
         loadSlots(date);
       } catch (e) { showToast(e.message, 'error'); }
@@ -1040,7 +954,7 @@
 
     // DELETE /api/crm/timeslots/{table_id}/{date}/{start_time}
     // → api_delete_single_slot()
-    // start_time arg must already be URL-encoded (encodeURIComponent) since it contains ':'.
+    // start_time must be URL-encoded (':' → '%3A') to survive FastAPI path parsing.
     async function deleteSingleSlot(tableId, date, encodedStart) {
       try {
         await api('DELETE', `/api/crm/timeslots/${tableId}/${date}/${encodedStart}`);
@@ -1050,7 +964,7 @@
     }
 
     // DELETE /api/crm/timeslots  body: { table_ids: [id], date }
-    // → api_delete_timeslots() — deletes ALL slots for the given table on a date.
+    // → api_delete_timeslots() — deletes ALL slots for the given tables on a date
     async function clearTableSlots(tableId, date) {
       if (!confirm(`Remove ALL slots for this table on ${date}?`)) return;
       try {
@@ -1060,10 +974,9 @@
       } catch (e) { showToast(e.message, 'error'); }
     }
 
-    // Collect all table IDs from the bulk checkboxes (mirrors the server-side tables list)
-    // and delete all their slots for the given date.
     async function clearDaySlots(date) {
       if (!confirm(`Remove ALL slots for ALL tables on ${date}? This cannot be undone.`)) return;
+      // Collect every table_id from the bulk checkboxes (mirrors server-side tables list)
       const allTableIds = [...document.querySelectorAll('[name=bulk-tables]')].map(cb => cb.value);
       try {
         await api('DELETE', '/api/crm/timeslots', { table_ids: allTableIds, date });
@@ -1081,10 +994,8 @@
       document.getElementById('table-modal-title').textContent = 'Edit Table';
       openModal('modal-table', true);
     }
-
-    // POST /api/crm/tables      body: TableIn → api_create_table()
-    // PUT  /api/crm/tables/{id} body: TableIn → api_update_table()
-    // TableIn: { table_number: int, capacity: int, location: str }
+    // PUT /api/crm/tables/{id}  body: TableIn  → api_update_table()
+    // POST /api/crm/tables      body: TableIn  → api_create_table()
     async function saveTable() {
       const id  = document.getElementById('table-edit-id').value;
       const num = +document.getElementById('table-number').value;
@@ -1103,7 +1014,6 @@
         setTimeout(() => location.reload(), 700);
       } catch (e) { showToast(e.message, 'error'); }
     }
-
     // DELETE /api/crm/tables/{id} → api_delete_table()
     async function deleteTable(id) {
       if (!confirm('Delete this table? This cannot be undone.')) return;
@@ -1124,11 +1034,8 @@
       document.getElementById('guest-modal-title').textContent = 'Edit Guest';
       openModal('modal-guest', true);
     }
-
-    // POST /api/crm/guests      body: GuestIn → api_create_guest()
-    // PUT  /api/crm/guests/{id} body: GuestIn → api_update_guest()
-    // GuestIn: { name, phone, email, notes } — phone/email/notes are Optional.
-    // Note: visit_count is NOT in GuestIn; it's managed server-side.
+    // PUT /api/crm/guests/{id}  body: GuestIn  → api_update_guest()
+    // POST /api/crm/guests      body: GuestIn  → api_create_guest()
     async function saveGuest() {
       const id    = document.getElementById('guest-edit-id').value;
       const name  = document.getElementById('guest-name').value.trim();
@@ -1148,7 +1055,6 @@
         setTimeout(() => location.reload(), 700);
       } catch (e) { showToast(e.message, 'error'); }
     }
-
     // DELETE /api/crm/guests/{id} → api_delete_guest()
     async function deleteGuest(id) {
       if (!confirm('Delete this guest?')) return;
@@ -1160,10 +1066,8 @@
     }
 
     // ── RESERVATIONS ──────────────────────────────────────────────────────────
-    // POST /api/crm/reservations → api_create_reservation()
-    // Body matches ReservationIn: { guest_id, table_id, party_size, date, time_slot, notes }
-    // Server enforces: reservation limit, slot double-booking (_slot_available).
-    // Note: does NOT enforce slot-defined check (only AI path does via _execute_booking_tool).
+    // POST /api/crm/reservations  body: ReservationIn → api_create_reservation()
+    // ReservationIn fields: guest_id, table_id, party_size, date, time_slot, notes
     async function saveReservation() {
       const guest_id   = document.getElementById('res-guest').value;
       const table_id   = document.getElementById('res-table').value;
@@ -1180,9 +1084,7 @@
         setTimeout(() => location.reload(), 700);
       } catch (e) { showToast(e.message, 'error'); }
     }
-
     // PATCH /api/crm/reservations/{id}/cancel → api_cancel_reservation()
-    // Sets status = "cancelled". Does NOT decrement visit_count.
     async function cancelRes(id) {
       if (!confirm('Cancel this reservation?')) return;
       try {
@@ -1193,8 +1095,8 @@
     }
 
     // ── Modals ────────────────────────────────────────────────────────────────
-    // isEdit=true: called from edit button — preserves field values.
-    // isEdit=false: called from "Add" button — clears fields to blank.
+    // isEdit=true: called from an edit button — don't reset fields
+    // isEdit=false: called from "Add" button — reset to blank
     function openModal(id, isEdit) {
       if (!isEdit) {
         if (id === 'modal-table') {
@@ -1220,12 +1122,13 @@
     });
 
     // ── Init ─────────────────────────────────────────────────────────────────
-    // Set today as default for all date inputs.
-    document.getElementById('slots-date').value = TODAY;
-    document.getElementById('bulk-date').value  = TODAY;
+    // Set today as default for all date inputs (crm_page does not pass `today`)
+    document.getElementById('slots-date').value  = TODAY;
+    document.getElementById('bulk-date').value   = TODAY;
     updateBulkPreview();
 
-    // Pre-load slots for today so the Time Slots tab is populated on first click.
+    // Auto-load slots for today on page load so the Time Slots tab is
+    // immediately populated when the user clicks it (fixes "hidden after refresh")
     loadSlots(TODAY);
   </script>
 </body>
