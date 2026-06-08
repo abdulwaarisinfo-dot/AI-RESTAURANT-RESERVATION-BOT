@@ -4,11 +4,18 @@
   <title>Sign Up — Tablely</title>
   {% include "_base_styles.html" %}
   <style>
+    /* ── OTP FLOW STATES ─────────────────────────────────── */
+    /* Step 1: fill form fields + click "Send OTP"           */
+    /* Step 2: OTP input appears, user enters code           */
+    /* Step 3: verified ✅ → submit button unlocks           */
+
     .auth-page {
       min-height: 100vh;
       display: grid;
       grid-template-columns: 1fr 1fr;
     }
+
+    /* ── LEFT PANEL ───────────────────────────────────────── */
     .auth-left {
       background:
         radial-gradient(ellipse 80% 60% at 50% 40%, rgba(201,169,110,.1) 0%, transparent 70%),
@@ -26,10 +33,7 @@
         linear-gradient(90deg, var(--border) 1px, transparent 1px);
       background-size: 50px 50px;
     }
-    .auth-brand {
-      position: relative; z-index: 1;
-      text-align: center;
-    }
+    .auth-brand { position: relative; z-index: 1; text-align: center; }
     .auth-brand-logo {
       display: flex; align-items: center; justify-content: center; gap: 10px;
       font-family: 'Cormorant Garamond', serif; font-size: 1.5rem;
@@ -41,10 +45,11 @@
       color: var(--text); line-height: 1.2; margin-bottom: 16px;
     }
     .auth-tagline em { font-style: italic; color: var(--gold); }
-    .auth-sub { font-size: .9rem; color: var(--text-2); line-height: 1.65; max-width: 320px; margin: 0 auto; }
-    .auth-stats {
-      display: flex; gap: 32px; margin-top: 48px;
+    .auth-sub {
+      font-size: .9rem; color: var(--text-2); line-height: 1.65;
+      max-width: 320px; margin: 0 auto;
     }
+    .auth-stats { display: flex; gap: 32px; margin-top: 48px; }
     .auth-stat { text-align: center; }
     .auth-stat-val {
       font-family: 'Cormorant Garamond', serif;
@@ -52,20 +57,84 @@
     }
     .auth-stat-label { font-size: .75rem; color: var(--text-3); letter-spacing: .05em; }
 
+    /* ── RIGHT PANEL ──────────────────────────────────────── */
     .auth-right {
       display: flex; align-items: center; justify-content: center;
-      padding: 48px 32px;
-      background: var(--bg);
+      padding: 48px 32px; background: var(--bg);
     }
     .auth-form-box { width: 100%; max-width: 420px; }
-    .auth-form-header { margin-bottom: 32px; }
-    .auth-form-title {
-      font-size: 1.9rem; color: var(--text); margin-bottom: 6px;
-    }
+    .auth-form-header { margin-bottom: 28px; }
+    .auth-form-title { font-size: 1.9rem; color: var(--text); margin-bottom: 6px; }
     .auth-form-sub { font-size: .88rem; color: var(--text-2); }
     .auth-form-sub a { color: var(--gold); }
-    .auth-form { display: flex; flex-direction: column; gap: 16px; }
+
+    .auth-form { display: flex; flex-direction: column; gap: 14px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── OTP SECTION ──────────────────────────────────────── */
+    .otp-section {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: none; /* hidden until email filled */
+      flex-direction: column;
+      gap: 12px;
+    }
+    .otp-section.visible { display: flex; }
+
+    .otp-label {
+      font-size: .8rem; color: var(--text-2); line-height: 1.5;
+    }
+    .otp-label strong { color: var(--text); }
+
+    .otp-row {
+      display: flex; gap: 8px; align-items: flex-end;
+    }
+    .otp-row .form-group { flex: 1; margin: 0; }
+    .otp-row input { letter-spacing: .2em; font-size: 1.1rem; text-align: center; }
+
+    .btn-send-otp {
+      white-space: nowrap;
+      flex-shrink: 0;
+      height: 42px;
+      padding: 0 16px;
+      font-size: .82rem;
+    }
+
+    /* verified badge */
+    .otp-verified {
+      display: none;
+      align-items: center; gap: 6px;
+      font-size: .82rem; color: var(--green);
+      padding: 6px 10px;
+      background: rgba(16,185,129,.08);
+      border: 1px solid rgba(16,185,129,.2);
+      border-radius: var(--radius);
+    }
+    .otp-verified.show { display: flex; }
+
+    /* otp status message */
+    .otp-msg {
+      font-size: .78rem;
+      min-height: 18px;
+      transition: color .2s;
+    }
+    .otp-msg.ok  { color: var(--green); }
+    .otp-msg.err { color: var(--red, #ef4444); }
+
+    /* countdown */
+    .otp-countdown {
+      font-size: .75rem; color: var(--text-3);
+      display: none;
+    }
+    .otp-countdown.visible { display: block; }
+
+    /* submit locked state */
+    .btn-submit:disabled {
+      opacity: .45; cursor: not-allowed;
+    }
+
     .auth-footer-text {
       text-align: center; font-size: .78rem; color: var(--text-3); margin-top: 20px;
     }
@@ -75,11 +144,11 @@
       .auth-page { grid-template-columns: 1fr; }
       .auth-left { display: none; }
       .auth-right { padding: 32px 20px; min-height: 100vh; }
+      .form-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <!-- Minimal nav -->
   <nav class="nav">
     <a class="nav-brand" href="/">
       <div class="nav-brand-dot"></div>
@@ -91,6 +160,7 @@
   </nav>
 
   <div class="auth-page" style="padding-top:60px;">
+
     <!-- LEFT PANEL -->
     <div class="auth-left">
       <div class="auth-left-grid"></div>
@@ -118,7 +188,7 @@
       </div>
     </div>
 
-    <!-- RIGHT FORM PANEL -->
+    <!-- RIGHT PANEL -->
     <div class="auth-right">
       <div class="auth-form-box">
         <div class="auth-form-header">
@@ -130,31 +200,74 @@
         <div class="alert alert-error" style="margin-bottom:20px;">{{ error }}</div>
         {% endif %}
 
-        <form class="auth-form" method="POST" action="/signup">
+        <!-- Hidden field set by JS once OTP verified — backend checks this via _is_otp_verified() -->
+        <input type="hidden" id="otp_verified_flag" value="0" />
+
+        <form class="auth-form" id="signupForm" method="POST" action="/signup"
+              onsubmit="return guardSubmit(event)">
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Restaurant Name</label>
-              <input class="form-input" type="text" name="restaurant_name"
+              <input class="form-input" type="text" name="restaurant_name" id="restaurant_name"
                      placeholder="The Grand Bistro" required autocomplete="organization" />
             </div>
             <div class="form-group">
               <label class="form-label">Your Name</label>
-              <input class="form-input" type="text" name="owner_name"
+              <input class="form-input" type="text" name="owner_name" id="owner_name"
                      placeholder="Alex Smith" required autocomplete="name" />
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Email Address</label>
-            <input class="form-input" type="email" name="email"
-                   placeholder="you@restaurant.com" required autocomplete="email" />
+            <input class="form-input" type="email" name="email" id="emailInput"
+                   placeholder="you@restaurant.com" required autocomplete="email"
+                   oninput="onEmailInput()" />
           </div>
+
+          <!-- OTP section — appears after email is valid -->
+          <div class="otp-section" id="otpSection">
+            <div class="otp-label" id="otpLabel">
+              Enter your email above, then click <strong>Send OTP</strong> to verify.
+            </div>
+
+            <div class="otp-row">
+              <div class="form-group">
+                <label class="form-label">Verification Code</label>
+                <input class="form-input" type="text" id="otpInput"
+                       placeholder="123456" maxlength="6"
+                       inputmode="numeric" pattern="\d{6}"
+                       oninput="this.value=this.value.replace(/\D/g,'')" />
+              </div>
+              <button type="button" class="btn btn-outline btn-send-otp" id="sendOtpBtn"
+                      onclick="sendOtp()">
+                Send OTP
+              </button>
+            </div>
+
+            <div class="otp-countdown" id="otpCountdown"></div>
+            <div class="otp-msg" id="otpMsg"></div>
+
+            <button type="button" class="btn btn-ghost" id="verifyOtpBtn"
+                    onclick="verifyOtp()" style="display:none;">
+              Verify Code →
+            </button>
+
+            <div class="otp-verified" id="otpVerifiedBadge">
+              ✅ Email verified — you can now create your account
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Password</label>
             <input class="form-input" type="password" name="password"
                    placeholder="Minimum 8 characters" required autocomplete="new-password"
                    minlength="8" />
           </div>
-          <button type="submit" class="btn btn-primary btn-lg" style="width:100%;margin-top:4px;">
+
+          <button type="submit" class="btn btn-primary btn-lg btn-submit"
+                  id="submitBtn" style="width:100%;margin-top:4px;" disabled>
             Create Account →
           </button>
         </form>
@@ -165,5 +278,160 @@
       </div>
     </div>
   </div>
+
+  <script>
+    /* ── STATE ────────────────────────────────────────────── */
+    let otpSent       = false;
+    let otpVerified   = false;
+    let countdownTimer = null;
+
+    /* ── EMAIL INPUT ──────────────────────────────────────── */
+    function onEmailInput() {
+      const email = document.getElementById('emailInput').value.trim();
+      const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      const sec   = document.getElementById('otpSection');
+      if (valid) {
+        sec.classList.add('visible');
+        document.getElementById('otpLabel').innerHTML =
+          `We'll send a 6-digit code to <strong>${email}</strong>`;
+      } else {
+        sec.classList.remove('visible');
+      }
+    }
+
+    /* ── SEND OTP — POST /auth/send-otp ──────────────────── */
+    async function sendOtp() {
+      const email = document.getElementById('emailInput').value.trim();
+      const name  = document.getElementById('owner_name').value.trim() || 'Friend';
+      const btn   = document.getElementById('sendOtpBtn');
+      const msg   = document.getElementById('otpMsg');
+
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      setMsg('', '');
+
+      try {
+        const res  = await fetch('/auth/send-otp', {
+          method:  'POST',
+          headers: {'Content-Type': 'application/json'},
+          body:    JSON.stringify({ email, name }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          otpSent = true;
+          setMsg('OTP sent! Check your inbox.', 'ok');
+          document.getElementById('verifyOtpBtn').style.display = 'block';
+          document.getElementById('otpInput').focus();
+          startCountdown(600); // 10 min
+          btn.textContent = 'Resend OTP';
+        } else {
+          setMsg(data.error || 'Failed to send OTP.', 'err');
+          btn.textContent = 'Send OTP';
+        }
+      } catch (e) {
+        setMsg('Network error. Please try again.', 'err');
+        btn.textContent = 'Send OTP';
+      } finally {
+        // re-enable after 30s to allow resend
+        setTimeout(() => { btn.disabled = false; }, 30000);
+      }
+    }
+
+    /* ── VERIFY OTP — POST /auth/verify-otp ──────────────── */
+    async function verifyOtp() {
+      const email    = document.getElementById('emailInput').value.trim();
+      const otpInput = document.getElementById('otpInput').value.trim();
+      const btn      = document.getElementById('verifyOtpBtn');
+
+      if (otpInput.length !== 6) {
+        setMsg('Enter the 6-digit code.', 'err');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying…';
+      setMsg('', '');
+
+      try {
+        const res  = await fetch('/auth/verify-otp', {
+          method:  'POST',
+          headers: {'Content-Type': 'application/json'},
+          body:    JSON.stringify({ email, otp: otpInput }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          otpVerified = true;
+          document.getElementById('otp_verified_flag').value = '1';
+          setMsg('', '');
+          document.getElementById('otpVerifiedBadge').classList.add('show');
+          document.getElementById('verifyOtpBtn').style.display  = 'none';
+          document.getElementById('sendOtpBtn').style.display     = 'none';
+          document.getElementById('otpInput').disabled            = true;
+          document.getElementById('submitBtn').disabled           = false;
+          clearCountdown();
+        } else {
+          setMsg(data.error || 'Incorrect code.', 'err');
+          btn.disabled    = false;
+          btn.textContent = 'Verify Code →';
+        }
+      } catch (e) {
+        setMsg('Network error. Please try again.', 'err');
+        btn.disabled    = false;
+        btn.textContent = 'Verify Code →';
+      }
+    }
+
+    /* ── SUBMIT GUARD ─────────────────────────────────────── */
+    function guardSubmit(e) {
+      if (!otpVerified) {
+        e.preventDefault();
+        setMsg('Please verify your email first.', 'err');
+        return false;
+      }
+      return true;
+    }
+
+    /* ── HELPERS ──────────────────────────────────────────── */
+    function setMsg(text, type) {
+      const el = document.getElementById('otpMsg');
+      el.textContent = text;
+      el.className   = 'otp-msg' + (type ? ' ' + type : '');
+    }
+
+    function startCountdown(seconds) {
+      clearCountdown();
+      const el = document.getElementById('otpCountdown');
+      el.classList.add('visible');
+      let remaining = seconds;
+      tick();
+      countdownTimer = setInterval(tick, 1000);
+      function tick() {
+        if (remaining <= 0) {
+          clearCountdown();
+          el.textContent = 'OTP expired. Please resend.';
+          return;
+        }
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        el.textContent = `Code expires in ${m}:${String(s).padStart(2,'0')}`;
+        remaining--;
+      }
+    }
+
+    function clearCountdown() {
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      const el = document.getElementById('otpCountdown');
+      if (el) el.classList.remove('visible');
+    }
+
+    /* Allow Enter key in OTP input to trigger verify */
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('otpInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); verifyOtp(); }
+      });
+    });
+  </script>
 </body>
 </html>
