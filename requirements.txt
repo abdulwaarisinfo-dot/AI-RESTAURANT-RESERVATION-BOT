@@ -1,5 +1,6 @@
 # ============================================================
 # AI Restaurant Reservation Bot v4.3 — Requirements
+# Python 3.12 required (3.14 not supported — pydantic-core has no wheel)
 # ============================================================
 
 # Web framework
@@ -17,9 +18,10 @@ bcrypt==4.2.1
 passlib[bcrypt]==1.7.4
 cryptography==44.0.0
 
-# Data validation
-pydantic==2.10.4
-pydantic[email]==2.10.4
+# Data validation (pinned for Python 3.12 wheel availability)
+pydantic==2.7.4
+pydantic[email]==2.7.4
+pydantic-core==2.18.4
 email-validator==2.2.0
 
 # AI & HTTP
