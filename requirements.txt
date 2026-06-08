@@ -1,42 +1,20 @@
-# ============================================================
-# AI Restaurant Reservation Bot v4.3 — Requirements
-# Python 3.12 required (3.14 not supported — pydantic-core has no wheel)
-# ============================================================
-
-# Web framework
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
-starlette==0.41.3
-python-multipart==0.0.20
-
-# Database
-pymongo==4.10.1
-
-# Auth & Security
+fastapi==0.129.0
+uvicorn[standard]==0.40.0
+pymongo==4.16.0
+motor==3.7.1
+pydantic==2.12.5
+pydantic[email]
+email-validator==2.3.0
 PyJWT==2.10.1
-bcrypt==4.2.1
-passlib[bcrypt]==1.7.4
-cryptography==44.0.0
-
-# Data validation (pinned for Python 3.12 wheel availability)
-pydantic==2.7.4
-pydantic[email]==2.7.4
-pydantic-core==2.18.4
-email-validator==2.2.0
-
-# AI & HTTP
-anthropic==0.43.0
+bcrypt==3.2.2
+passlib==1.7.4
+python-dotenv==1.2.1
+anthropic==0.40.0
 httpx==0.28.1
-
-# Email (OTP)
+python-multipart==0.0.22
+Jinja2==3.1.6
+anyio==4.12.1
+starlette==0.52.1
+cryptography==46.0.5
+websockets==13.1 
 resend==2.7.0
-
-# Environment
-python-dotenv==1.0.1
-
-# Templating
-Jinja2==3.1.5
-
-# Async
-anyio==4.8.0
-websockets==14.1
