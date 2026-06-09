@@ -127,7 +127,7 @@ PLANS = {
         "reservations_month": 1200,
         "tables_max":         10,
         "slot_horizon_days":  999,   # v4.2: unlimited
-        "paddle_price_id":    os.getenv("PADDLE_PRICE_STARTER", "pri_starter"),
+        "paddle_price_id":    os.getenv("PADDLE_PRICE_STARTER", ""),
         "color":              "#6366f1",
         "features": [
             "1,200 reservations / month",
@@ -144,7 +144,7 @@ PLANS = {
         "reservations_month": 1600,
         "tables_max":         25,
         "slot_horizon_days":  999,   # v4.2: unlimited
-        "paddle_price_id":    os.getenv("PADDLE_PRICE_PRO", "pri_pro"),
+        "paddle_price_id":    os.getenv("PADDLE_PRICE_PRO", ""),
         "color":              "#f59e0b",
         "features": [
             "1,600 reservations / month",
@@ -161,7 +161,7 @@ PLANS = {
         "reservations_month": 2000,
         "tables_max":         999,
         "slot_horizon_days":  999,   # v4.2: unlimited
-        "paddle_price_id":    os.getenv("PADDLE_PRICE_ENT", "pri_ent"),
+        "paddle_price_id":    os.getenv("PADDLE_PRICE_ENT", ""),
         "color":              "#10b981",
         "features": [
             "2,000 reservations / month",
@@ -764,7 +764,7 @@ async def paddle_create_checkout(owner_doc: dict, plan_key: str) -> dict:
     }
     async with httpx.AsyncClient() as client:
         r = await client.post(
-            f"{PADDLE_BASE_URL}/checkouts",
+            f"{PADDLE_BASE_URL}/transactions",
             headers=headers,
             json=payload,
             timeout=10,
