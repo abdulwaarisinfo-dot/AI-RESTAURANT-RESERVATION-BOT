@@ -83,15 +83,15 @@ logger = logging.getLogger("AI.RESTAURANT.BOT")
 # CONFIG
 # ============================================================
 
-MONGO_URL             = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+MONGO_URL             = os.getenv("MONGO_URL", "")
 ANTHROPIC_KEY         = os.getenv("ANTHROPIC_API_KEY", "")
-JWT_SECRET            = os.getenv("JWT_SECRET", "change-me-in-production-use-256bit-random")
+JWT_SECRET            = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM         = "HS256"
 JWT_EXPIRE_DAYS       = 30
 
 # Resend.com config — FREE 3000 emails/month, works internationally
 RESEND_API_KEY        = os.getenv("RESEND_API_KEY", "")
-APP_FROM_EMAIL        = os.getenv("APP_FROM_EMAIL", "noreply@yourapp.com")
+APP_FROM_EMAIL        = os.getenv("APP_FROM_EMAIL", "")
 
 # Free tier — no billing required
 FREE_RESERVATIONS     = 10
@@ -760,7 +760,7 @@ async def paddle_create_checkout(owner_doc: dict, plan_key: str) -> dict:
             "restaurant_id": str(owner_doc["_id"]),
             "plan":          plan_key,
         },
-        "success_url": os.getenv("APP_URL", "http://localhost:8000") + "/billing/success",
+        "success_url": os.getenv("APP_URL", "") + "/billing/success",
     }
     async with httpx.AsyncClient() as client:
         r = await client.post(
