@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Privacy Policy — Tablely</title>
+  {% include "_base_styles.html" %}
+  <style>
+    .legal-page { max-width: 780px; margin: 0 auto; padding: 100px 24px 80px; }
+    .legal-header { margin-bottom: 48px; }
+    .legal-header h1 { font-size: 2.6rem; margin-bottom: 10px; }
+    .legal-header p  { color: var(--text-3); font-size: .88rem; }
+    .legal-section   { margin-bottom: 36px; }
+    .legal-section h2 { font-size: 1.3rem; color: var(--gold); margin-bottom: 12px; }
+    .legal-section p  { color: var(--text-2); font-size: .9rem; line-height: 1.8; margin-bottom: 10px; }
+    .legal-section ul { color: var(--text-2); font-size: .9rem; line-height: 1.8; padding-left: 20px; }
+    .legal-section ul li { margin-bottom: 6px; }
+    .legal-divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/">
+      <div class="nav-brand-dot"></div>
+      Tablely
+    </a>
+    <div class="nav-links">
+      <a href="/login">Login</a>
+      <a href="/signup" class="btn btn-primary btn-sm">Get Started</a>
+    </div>
+  </nav>
+
+  <div class="legal-page">
+    <div class="legal-header">
+      <h1>Privacy Policy</h1>
+      <p>Last updated: June 9, 2026 &nbsp;·&nbsp; Effective immediately</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>1. Introduction</h2>
+      <p>Tablely ("we", "us", "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our restaurant reservation management platform.</p>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>2. Information We Collect</h2>
+      <p>We collect the following types of information:</p>
+      <ul>
+        <li><strong style="color:var(--text)">Account Information:</strong> Restaurant name, owner name, email address, and password (hashed)</li>
+        <li><strong style="color:var(--text)">Billing Information:</strong> Subscription plan and payment details (processed by Paddle — we do not store card numbers)</li>
+        <li><strong style="color:var(--text)">Usage Data:</strong> Dashboard activity, reservation counts, and feature usage</li>
+        <li><strong style="color:var(--text)">Guest Data:</strong> Names, phone numbers, and emails of restaurant guests entered by you</li>
+        <li><strong style="color:var(--text)">Technical Data:</strong> IP addresses, browser type, and access logs for security purposes</li>
+      </ul>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>3. How We Use Your Information</h2>
+      <p>We use collected information to:</p>
+      <ul>
+        <li>Provide and operate the Tablely platform</li>
+        <li>Process subscription payments via Paddle</li>
+        <li>Send OTP verification emails via Resend</li>
+        <li>Improve and personalize the Service</li>
+        <li>Monitor for security threats and abuse</li>
+        <li>Respond to support requests</li>
+        <li>Send important account and service notifications</li>
+      </ul>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>4. Data Storage & Security</h2>
+      <p>Your data is stored in isolated MongoDB databases — each restaurant has its own separate database. We implement industry-standard security measures including:</p>
+      <ul>
+        <li>bcrypt password hashing</li>
+        <li>JWT-based authentication with expiry</li>
+        <li>HTTPS encryption in transit</li>
+        <li>Security headers (XSS protection, CSRF, etc.)</li>
+        <li>Rate limiting to prevent abuse</li>
+      </ul>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>5. Third-Party Services</h2>
+      <p>We use the following third-party services:</p>
+      <ul>
+        <li><strong style="color:var(--text)">Paddle:</strong> Payment processing and subscription management. Subject to <a href="https://www.paddle.com/legal/privacy" target="_blank">Paddle's Privacy Policy</a></li>
+        <li><strong style="color:var(--text)">Resend:</strong> Transactional email delivery for OTP verification. Subject to <a href="https://resend.com/privacy" target="_blank">Resend's Privacy Policy</a></li>
+        <li><strong style="color:var(--text)">Anthropic Claude:</strong> AI agent for reservation conversations. Guest messages are processed to generate responses</li>
+        <li><strong style="color:var(--text)">MongoDB:</strong> Database storage for all platform data</li>
+      </ul>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>6. Guest Data Ownership</h2>
+      <p>Reservation and guest data (names, contacts, booking history) entered into your Tablely account belongs to you as the restaurant operator. We process this data on your behalf to provide the Service. We do not sell or share guest data with third parties for marketing purposes.</p>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>7. Data Retention</h2>
+      <p>We retain your account data for as long as your account is active. Upon account deletion, your data is removed within 30 days. Billing records may be retained longer as required by law.</p>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>8. Your Rights</h2>
+      <p>You have the right to:</p>
+      <ul>
+        <li>Access the personal data we hold about you</li>
+        <li>Request correction of inaccurate data</li>
+        <li>Request deletion of your account and data</li>
+        <li>Export your reservation and guest data</li>
+        <li>Opt out of non-essential communications</li>
+      </ul>
+      <p>To exercise these rights, contact us at <a href="mailto:privacy@tablely.app">privacy@tablely.app</a>.</p>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>9. Cookies</h2>
+      <p>Tablely uses a single session cookie (<code style="color:var(--gold);font-size:.85rem">access_token</code>) for authentication. This cookie is HTTP-only and expires after 30 days. We do not use tracking or advertising cookies.</p>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>10. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy periodically. We will notify you of significant changes via email. Continued use of the Service after changes constitutes acceptance.</p>
+    </div>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>11. Contact</h2>
+      <p>For privacy-related questions or requests, contact us at <a href="mailto:privacy@tablely.app">privacy@tablely.app</a>.</p>
+    </div>
+  </div>
+</body>
+</html>
